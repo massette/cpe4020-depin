@@ -16,7 +16,7 @@ NODE_ADDR = Address.VALIDATORS[NODE_ID]
 
 # KEYS
 keys = {}
-keys["self"] = Private("keys/validator.prv.pem"),
+keys["self"] = Private("keys/validator.prv.pem")
 
 for w in Address.WALLETS:
     keys[w] = Public("keys/{}.pub.pem".format(w))
@@ -71,7 +71,7 @@ def handle_channel(tcp):
         data = json.loads(m.body.decode())
 
         # validate data
-        print(data)
+        print(ch["id"], data)
 
         # send VAL to validator network
 
