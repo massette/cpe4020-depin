@@ -1,4 +1,5 @@
 import struct
+import socket
 from enum import Enum
 
 def to_bytes(part):
@@ -10,9 +11,11 @@ def to_bytes(part):
         return struct.pack(">B", part.value)
     elif isinstance(part, int):
         return struct.pack(">I", part)
+    elif isinstance(part, tuple):
+        return socket.inet_aton(part[0]) + struct.pack(">I", part[1])
     else:
         raise ValueError("Failed to convert part to bytes: " + str(part))
 
 def concat(*parts, separator=b"."):
-    return separator.join([to_bytes(part) for part in parts])
+    return separator.join(tuple(to_bytes(part) for part in parts))
 

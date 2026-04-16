@@ -9,14 +9,16 @@ import socket
 import select
 from secrets import randbits
 
+import sys
+
 # NODE INFO
-NODE_ID = "W001"
+NODE_ID = sys.argv[1]
+NODE_ADDR = Address.WALLETS[NODE_ID]
 
 # KEYS
-key = {
-    "wallet": Private("keys/W001.prv.pem"),
-    "validator": Public("keys/validator.pub.pem")
-}
+keys = {}
+keys["self"] = Private("keys/{}.prv.pem".format(NODE_ID))
+keys["validator"] = Public("keys/validator.pub.pem")
 
 # CONNECTIONS
 pending = {}
@@ -25,7 +27,7 @@ pending = {}
 def send(data):
     # create dedicated channel
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp.bind((Address.WALLET, 0))
+    tcp.bind(NODE_ADDR)
     tcp.listen()
 
     # generate new session id
@@ -34,50 +36,58 @@ def send(data):
     while r in pending:
         r = randbits(32)
 
-    (local, port) = tcp.getsockname()
+    address = tcp.getsockname()
     pending[tcp] = {
         "session": r,
-        "data": data,
+        "data": json.dumps(data).encode(),
         "ack": 0
     }
 
     # broadcast REQ (258 bytes)
-    try:
-        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
         udp.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
         req = concat(
             Type.REQ,
-            key["validator"].encrypt(NODE_ID, r, port)
+            keys["validator"].encrypt(NODE_ID, r, tcp.getsockname())
         )
 
         udp.sendto(req, Address.BROADCAST)
-    finally:
-        udp.close()
 
 def handle_channel(tcp):
     ch = pending[tcp]
-    (tcp_ch, _) = tcp.accept()
+    (tcp_connect, _) = tcp.accept()
 
-    m = Message(tcp_ch)
-    
-    if m.type == Type.ACK:
-        ch["ack"] += 1
+    with tcp_connect:
+        m = Message(tcp_connect)
+        
+        if m.type == Type.ACK:
+            ch["ack"] += 1
 
-        m.apply(key["wallet"].decrypt)
-        (validator_id, r) = m.get_fields(str, int)
+            # parse ACK
+            m.apply(keys["self"].decrypt)
+            (validator_id, r) = m.get_fields(str, int)
 
-        # check nonce
-        print(ch["ack"], validator_id, r, r == ch["session"])
-        # send TKN
-        tcp_ch.send(b"SEND DATA HERE.\n" + json.dumps(ch["data"]).encode())
+            # check nonce
+            if r != ch["session"]:
+                raise m.error("Wrong channel.")
 
-    # close channel
-    tcp_ch.close()
+            # send TKN
+            ack = concat(
+                Type.TKN,
+                keys["self"].sign(keys["validator"].encrypt(ch["data"]))
+            )
+
+            tcp_connect.send(ack)
+
+    # close port when all responses have been received
+    if ch["ack"] >= len(Address.VALIDATORS):
+        pending.pop(tcp)
+        tcp.close()
 
 def poll():
     try:
-        while True:
+        while len(pending) > 0:
             (read_ready, _, _) = select.select(pending.keys(), [], [])
 
             for tcp in read_ready:
@@ -92,7 +102,6 @@ def close():
 if __name__ == "__main__":
     try:
         send({ "test": True })
-        send({ "raw": "another packet", "test": False })
         poll()
     finally:
         close()

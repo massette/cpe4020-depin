@@ -4,17 +4,25 @@ from lib.bytes import concat
 from lib.parse import Message
 from lib.error import AppException, BadMessageException
 
+import json
 import socket
 import select
 
+import sys
+
 # NODE INFO
-NODE_ID = "V001"
+NODE_ID = sys.argv[1]
+NODE_ADDR = Address.VALIDATORS[NODE_ID]
 
 # KEYS
-keys = {
-    "W001": Public("keys/W001.pub.pem"),
-    "validator": Private("keys/validator.prv.pem")
-}
+keys = {}
+keys["self"] = Private("keys/validator.prv.pem"),
+
+for w in Address.WALLETS:
+    keys[w] = Public("keys/{}.pub.pem".format(w))
+
+# SOCKETS
+pending = {}
 
 # FUNCTIONS
 def handle_request(s):
@@ -22,27 +30,52 @@ def handle_request(s):
     m = (
         Message(s)
             .parse_type(Type.REQ)
-            .apply(keys["validator"].decrypt)
+            .apply(keys["self"].decrypt)
     )
 
-    (node_id, session, port) = m.get_fields(str, int, int)
+    (node_id, session, address) = m.get_fields(str, int, Address)
 
     # start dedicated channel
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp.bind((Address.VALIDATOR, 0))
-    tcp.connect((m.address[0], port))
+    tcp.bind((NODE_ADDR[0], 0))
+    tcp.connect(address)
     tcp.settimeout(0)
+
+    pending[tcp] = {
+        "id": node_id,
+        "session": session,
+    }
     
     # send ACK (258 bytes)
     ack = concat(
         Type.ACK,
-        keys[node_id].encrypt(NODE_ID, session, port)
+        keys[node_id].encrypt(NODE_ID, session)
     )
 
     tcp.send(ack)
 
     # return dedicated channel
     return tcp
+
+def handle_channel(tcp):
+    with tcp:
+        ch = pending[tcp]
+
+        # parse TKN
+        m = (
+            Message(tcp)
+                .apply(keys[ch["id"]].unsign)
+                .apply(keys["self"].decrypt)
+        )
+
+        data = json.loads(m.body.decode())
+
+        # validate data
+        print(data)
+
+        # send VAL to validator network
+
+        # check for consensus
 
 def poll():
     sockets = []
@@ -51,7 +84,7 @@ def poll():
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         udp.settimeout(0)
-        udp.bind(Address.BROADCAST)
+        udp.bind(NODE_ADDR)
 
         sockets.append(udp)
 
@@ -64,24 +97,9 @@ def poll():
                         tcp = handle_request(udp)
                         sockets.append(tcp)
                     else:
-                        raw = s.recv(512)
-                        print(raw.decode())
-
-                        # parse TKN
-                        # TODO
-
-                        # close channel
+                        handle_channel(s)
                         sockets.remove(s)
-                        s.close()
-
-                        # validate data
-                        # TODO
-
-                        # send VAL to validator network
-                        # TODO
-
-                        # check for consensus
-                        # TODO
+                        pending.pop(s)
 
             except AppException as e:
                 print(e)
