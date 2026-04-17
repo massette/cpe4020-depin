@@ -2,12 +2,14 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 
+from cryptography.fernet import Fernet
+
 from lib.bytes import concat
 
 class Public:
     def __init__(self, filename):
-        with open(filename, "rb") as raw:
-            self.key = load_pem_public_key(raw.read())
+        with open(filename, "rb") as f:
+            self.key = load_pem_public_key(f.read())
 
     def encrypt(self, *parts):
         return self.key.encrypt(
@@ -36,9 +38,9 @@ class Public:
 
 class Private:
     def __init__(self, filename):
-        with open(filename, "rb") as raw:
+        with open(filename, "rb") as f:
             self.key = load_pem_private_key(
-                raw.read(),
+                f.read(),
                 password=None
             )
 
@@ -65,3 +67,16 @@ class Private:
                 label=None
             )
         )
+
+class Symmetric:
+    def __init__(self, filename):
+        with open(filename, "rb") as f:
+            self.key = f.read()
+
+        self.cipher = Fernet(self.key)
+
+    def encrypt(self, *parts):
+        return self.cipher.encrypt(concat(*parts))
+
+    def decrypt(self, ciphertext):
+        return self.cipher.decrypt(ciphertext)
