@@ -14,7 +14,7 @@ class Type(Enum):
 
 
 class Address:
-    BROADCAST = ("127.0.0.255", 6561)
+    BROADCAST = ("11.31.7.255", 6561)
 
     VALIDATORS = {
         "V01": ("127.0.0.1", 6562),
