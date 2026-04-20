@@ -19,9 +19,25 @@ for w in Address.WALLETS:
     keys[w] = Public("keys/{}.pub.pem".format(w))
 
 # SOCKETS
+sessions = {}
 channels = {}
 
+votes = {}
+done = set()
+
 # FUNCTIONS
+def send_all(msg):
+    for v in Address.VALIDATORS:
+        if v == NODE_ID:
+            continue
+
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_v:
+                tcp_v.connect(Address.VALIDATORS[v])
+                tcp_v.send(msg)
+        except ConnectionRefusedError:
+            print("Connection rejected on node {}!".format(v))
+
 def handle_request(s):
     # parse REQ (258 bytes)
     m = (
@@ -39,9 +55,8 @@ def handle_request(s):
     tcp.bind((NODE_ADDR[0], 0))
     tcp.connect(address)
 
-    channels[tcp] = {
-        "session": (node_id, r),
-    }
+    sessions[tcp] = (node_id, r)
+    channels[(node_id, r)] = address
     
     # send ACK (258 bytes)
     ack = concat(
@@ -54,45 +69,83 @@ def handle_request(s):
     # return dedicated channel
     return tcp
 
-def send_all(msg):
-    for v in Address.VALIDATORS:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_v:
-                tcp_v.connect(Address.VALIDATORS[v])
-                tcp_v.send(msg)
-        except ConnectionRefusedError:
-            print("Failed to connect on node {}.".format(v))
+def handle_vote(session, node_id, action):
+    if session not in votes:
+        votes[session] = {
+            Type.TKN: 0,
+            Type.BAD: 0,
+        }
+    
+    votes[session][action] += 1
+
+    for result in votes[session]:
+        if (session in channels) and (votes[session][result] > len(Address.VALIDATORS) / 2): 
+            print("INTERNAL CONSENSUS")
+            done.add(session)
+
+            # send "sealed" consensus to validator network
+            don = concat(
+                Type.DON,
+                keys["decision"].encrypt(action, NODE_ID, *session)
+            )
+
+            send_all(don)
+
+            # send "open" consensus to requesting node
+            don = concat(
+                Type.DON,
+                keys["self"].sign(action, NODE_ID, *session)
+            )
+
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
+                tcp.settimeout(Time.TIMEOUT)
+                tcp.bind((NODE_ADDR[0], 0))
+                tcp.connect(channels[session])
+
+                tcp.send(don)
+
+            return result
+
+    return None
 
 def handle_channel(tcp):
     with tcp:
-        ch = channels[tcp]
+        session = sessions[tcp]
+        (node_id, r) = session
+
+        if session in done:
+            return
 
         # parse TKN
         m = (
             Message(tcp)
                 .as_type(Type.TKN)
-                .apply(keys[ch["session"][0]].unsign)
+                .apply(keys[node_id].unsign)
                 .apply(keys["self"].decrypt)
         )
 
         data = m.as_json()
 
         # validate data
-        print(ch["session"][0], data)
+        print(node_id, data)
 
-        # send VAL to validator network
-        val = concat(
-            Type.VAL,
-            keys["decision"].encrypt(
-                Type.TKN, NODE_ID, ch["session"][0], ch["session"][1]
-            )
-        )
-
-        send_all(val)
+        action = Type.TKN
 
         # check for consensus
+        consensus = handle_vote(session, NODE_ID, action)
+        
+        if consensus == None:
+            # send VAL to validator network
+            val = concat(
+                Type.VAL,
+                keys["decision"].encrypt(
+                    action, NODE_ID, node_id, r
+                )
+            )
 
-def handle_decision(tcp):
+            send_all(val)
+
+def handle_peer(tcp):
         try:
             (v_tcp, _) = tcp.accept()
         except TimeoutError:
@@ -104,16 +157,20 @@ def handle_decision(tcp):
                     .as_type(Type.VAL, Type.DON)
                     .apply(keys["decision"].decrypt)
             )
+            
+            (action, validator_id, session) = m.get_fields(
+                Type, str, (str, int)
+            )
 
-            print(m.type)
-            print(m.get_fields(Type, str, str, int))
-            print()
+            if session in done:
+                return
 
-            # TODO! Fix race condition
-            # may receive decision before creating session
-            # may even finish session before receiving data
-
-            # check for consensus
+            if m.type == Type.DON:
+                print("EXTERNAL CONSENSUS")
+                done.add(session)
+            elif m.type == Type.VAL:
+                # update consensus
+                consensus = handle_vote(session, validator_id, action)
 
 def poll():
     sockets = []
@@ -141,12 +198,12 @@ def poll():
                     if s == udp:
                         new_tcp = handle_request(udp)
                         sockets.append(new_tcp)
-                    elif s in channels:
+                    elif s in sessions:
                         handle_channel(s)
                         sockets.remove(s)
-                        channels.pop(s)
+                        sessions.pop(s)
                     else:
-                        handle_decision(s)
+                        handle_peer(s)
 
                 time.sleep(Time.POLL)
             except AppException as e:

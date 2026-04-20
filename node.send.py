@@ -63,25 +63,31 @@ def handle_channel(tcp):
     (tcp_connect, _) = tcp.accept()
 
     with tcp_connect:
-        m = Message(tcp_connect).as_type(Type.ACK) 
+        m = Message(tcp_connect).as_type(Type.ACK, Type.DON) 
         
-        ch["ack"] += 1
+        if m.type == Type.ACK:
+            ch["ack"] += 1
 
-        # parse ACK
-        m.apply(keys["self"].decrypt)
-        (validator_id, r) = m.get_fields(str, int)
+            # parse ACK
+            m.apply(keys["self"].decrypt)
+            (validator_id, r) = m.get_fields(str, int)
 
-        # check nonce
-        if r != ch["session"]:
-            raise m.error("Bad session.")
+            # check nonce
+            if r != ch["session"]:
+                raise m.error("Bad session.")
 
-        # send TKN
-        ack = concat(
-            Type.TKN,
-            keys["self"].sign(keys["validator"].encrypt(ch["data"]))
-        )
+            # send TKN
+            ack = concat(
+                Type.TKN,
+                keys["self"].sign(keys["validator"].encrypt(ch["data"]))
+            )
 
-        tcp_connect.send(ack)
+            tcp_connect.send(ack)
+        elif m.type == Type.DON:
+            tcp.close()
+            pending.pop(tcp)
+            
+            print("Message #{} fulfilled.".format(ch["session"]))
 
 def fulfill():
     global pending
@@ -119,7 +125,13 @@ def close():
 
 if __name__ == "__main__":
     try:
-        send({ "test": True })
-        fulfill()
+        while True:
+            data = input("> ")
+
+            if data == "":
+                break
+            else:
+                send({ "test": data })
+                fulfill()
     finally:
         close()

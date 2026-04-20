@@ -46,20 +46,23 @@ class Message:
         return self
 
     def get_field(self, typ):
-        n = next_sep(self.body)
-        (raw, self.body) = self.body[:n], self.body[n+1:]
+        if isinstance(typ, type):
+            n = next_sep(self.body)
+            (raw, self.body) = self.body[:n], self.body[n+1:]
 
-        try:
-            if typ == bytes:
-                return raw
-            elif typ == str:
-                return raw.decode()
-            elif issubclass(typ, Enum):
-                return typ(struct.unpack(">B", raw)[0])
-            elif typ == int:
-                return struct.unpack(">I", raw)[0]
-        except (ValueError, struct.error):
-            raise self.error("Malformed message body.")
+            try:
+                if typ == bytes:
+                    return raw
+                elif typ == str:
+                    return raw.decode()
+                elif issubclass(typ, Enum):
+                    return typ(struct.unpack(">B", raw)[0])
+                elif typ == int:
+                    return struct.unpack(">I", raw)[0]
+            except (ValueError, struct.error):
+                raise self.error("Malformed message body.")
+        else:
+            return tuple(self.get_field(subtype) for subtype in typ)
 
     def get_fields(self, *types):
         return tuple(self.get_field(typ) for typ in types)
