@@ -4,7 +4,6 @@ from lib.bytes import concat
 from lib.parse import Message
 from lib.error import AppException
 
-import json
 import time
 import socket
 import select
@@ -41,7 +40,7 @@ def send(data):
 
     pending[tcp] = {
         "session": r,
-        "data": json.dumps(data).encode(),
+        "data": data,
         "start": time.time(),
         "ack": 0
     }

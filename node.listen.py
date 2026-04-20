@@ -4,7 +4,6 @@ from lib.bytes import concat
 from lib.parse import Message
 from lib.error import AppException, BadMessageException
 
-import json
 import socket
 import select
 
@@ -76,7 +75,7 @@ def handle_channel(tcp):
                 .apply(keys["self"].decrypt)
         )
 
-        data = json.loads(m.body.decode())
+        data = m.as_json()
 
         # validate data
         print(ch["session"][0], data)

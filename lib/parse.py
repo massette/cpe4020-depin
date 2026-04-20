@@ -31,6 +31,9 @@ class Message:
         self.body = self.raw
         self.type = self.get_field(Type)
 
+    def as_json(self):
+        return json.loads(self.body.decode())
+
     def parse_type(self, *types):
         if self.type not in types:
             raise self.error("Type {} not allowed.".format(self.type))
