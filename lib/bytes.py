@@ -12,6 +12,8 @@ def to_bytes(part):
         return struct.pack(">B", part.value)
     elif isinstance(part, int):
         return struct.pack(">I", part)
+    elif isinstance(part, float):
+        return struct.pack(">d", part)
     elif isinstance(part, dict):
         return json.dumps(part).encode()
     else:

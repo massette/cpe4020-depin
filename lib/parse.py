@@ -59,6 +59,8 @@ class Message:
                     return typ(struct.unpack(">B", raw)[0])
                 elif typ == int:
                     return struct.unpack(">I", raw)[0]
+                elif typ == float:
+                    return struct.unpack(">d", raw)[0]
             except (ValueError, struct.error):
                 raise self.error("Malformed message body.")
         else:

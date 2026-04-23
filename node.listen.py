@@ -69,7 +69,7 @@ def handle_request(s):
     # return dedicated channel
     return tcp
 
-def handle_vote(session, node_id, action):
+def handle_vote(session, node_id, action, data):
     if session not in votes:
         votes[session] = {
             Type.TKN: 0,
@@ -80,13 +80,34 @@ def handle_vote(session, node_id, action):
 
     for result in votes[session]:
         if (session in channels) and (votes[session][result] > len(Address.VALIDATORS) / 2): 
-            print("INTERNAL CONSENSUS")
+            print("INTERNAL CONSENSUS !")
+            timestamp = time.time()
+
+            if action == Type.TKN:
+                print("=====================================MINT==")
+                print("TIME=", timestamp)
+                print("SELL=", b"MINT")
+                print("BUY =", keys[session[0]].reveal())
+                print("-------------------------------------------")
+                print(data)
+                print("===========================================")
+                print()
+
+                # add_block(
+                #     timestamp,
+                #     "MINT",
+                #     keys[session[0]].reveal(),
+                #     data
+                # )
+
             done.add(session)
 
             # send "sealed" consensus to validator network
             don = concat(
                 Type.DON,
-                keys["decision"].encrypt(action, NODE_ID, *session)
+                keys["decision"].encrypt(
+                    action, timestamp, NODE_ID, *session, data
+                )
             )
 
             send_all(don)
@@ -127,19 +148,17 @@ def handle_channel(tcp):
         data = m.as_json()
 
         # validate data
-        print(node_id, data)
-
         action = Type.TKN
 
         # check for consensus
-        consensus = handle_vote(session, NODE_ID, action)
+        consensus = handle_vote(session, NODE_ID, action, data)
         
         if consensus == None:
             # send VAL to validator network
             val = concat(
                 Type.VAL,
                 keys["decision"].encrypt(
-                    action, NODE_ID, node_id, r
+                    action, NODE_ID, node_id, r, data
                 )
             )
 
@@ -158,19 +177,52 @@ def handle_peer(tcp):
                     .apply(keys["decision"].decrypt)
             )
             
-            (action, validator_id, session) = m.get_fields(
-                Type, str, (str, int)
-            )
+            if m.type == Type.VAL:
+                (action, validator_id, session) = m.get_fields(
+                    Type, str, (str, int)
+                )
 
-            if session in done:
-                return
+                if session in done:
+                    return
 
-            if m.type == Type.DON:
-                print("EXTERNAL CONSENSUS")
-                done.add(session)
-            elif m.type == Type.VAL:
+                data = m.as_json()
+
                 # update consensus
-                consensus = handle_vote(session, validator_id, action)
+                consensus = handle_vote(session, validator_id, action, data)
+            elif m.type == Type.DON:
+                (action, timestamp, validator_id, session) = m.get_fields(
+                    Type, float, str, (str, int)
+                )
+
+                if session in done:
+                    print(
+                        "Multiple consensus on Message {}#{}!".format(
+                            *session
+                        )
+                    )
+                    return
+                
+                if action == Type.TKN:
+                    data = m.as_json()
+
+                    print("EXTERNAL CONSENSUS !")
+                    print("=====================================MINT==")
+                    print("TIME=", timestamp)
+                    print("SELL=", b"MINT")
+                    print("BUY =", keys[session[0]].reveal())
+                    print("-------------------------------------------")
+                    print(data)
+                    print("===========================================")
+                    print()
+
+                    # add_block(
+                    #     timestamp,
+                    #     "MINT",
+                    #     keys[session[0]].reveal(),
+                    #     data
+                    # )
+
+                done.add(session)
 
 def poll():
     sockets = []

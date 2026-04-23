@@ -1,6 +1,6 @@
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key, Encoding, PublicFormat
 
 from cryptography.fernet import Fernet
 
@@ -10,6 +10,12 @@ class Public:
     def __init__(self, filename):
         with open(filename, "rb") as f:
             self.key = load_pem_public_key(f.read())
+
+    def reveal(self):
+        return self.key.public_bytes(
+            encoding=Encoding.PEM,
+            format=PublicFormat.SubjectPublicKeyInfo
+        )
 
     def encrypt(self, *parts):
         return self.key.encrypt(
