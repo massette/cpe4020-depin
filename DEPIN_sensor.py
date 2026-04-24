@@ -117,7 +117,7 @@ print(f"Initial angle set to {prev_angle:.1f}°")
 
 last_event_time = 0.0
 
-print("Bathroom Lock Monitoring Node STARTED - Waiting for lock rotation...")
+print("Waiting for lock rotation...")
 
 while True:
     try:
