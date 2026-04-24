@@ -69,11 +69,11 @@ class PiWallet:
         )
         return signature
 
-# Initialize MPU6050 (exit on failure)
+# Initialize MPU6050
 def init_mpu_or_exit():
     try:
         i2c = busio.I2C(board.SCL, board.SDA)
-        # small wait for I2C
+        
         t0 = time.time()
         while not i2c.try_lock() and (time.time() - t0) < 1.0:
             time.sleep(0.01)
@@ -116,7 +116,7 @@ while True:
         current_angle = get_current_angle(mpu)
     except Exception as e:
         print(f"Sensor read error: {e}")
-        # Optionally: attempt re-init or exit. Here we exit.
+       
         sys.exit(1)
 
     diff = angular_diff(current_angle, prev_angle)
@@ -146,7 +146,7 @@ while True:
         signature = wallet.sign_message(payload)
         payload["signature"] = signature.hex()
 
-        # send with simple retries
+
         try_count = 0
         max_tries = 3
         backoff = 1.0
