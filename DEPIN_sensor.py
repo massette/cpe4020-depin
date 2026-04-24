@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 VALIDATOR_URL = "placeholder"  # set real URL
 COINS_PER_EVENT = 10
 MIN_EVENT_GAP = 3.0                # seconds
-ROTATION_THRESHOLD_MIN = 30        # degrees (tunable)
+ROTATION_THRESHOLD_MIN = 30        # degrees
 ROTATION_THRESHOLD_MAX = 180
 WALLET_PATH = Path("wallet.pem")
 I2C_RETRY_DELAY = 2.0
