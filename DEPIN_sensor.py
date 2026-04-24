@@ -143,7 +143,6 @@ while True:
         signature = wallet.sign_message(payload)
         payload["signature"] = signature.hex()
 
-
         try_count = 0
         max_tries = 3
         backoff = 1.0
