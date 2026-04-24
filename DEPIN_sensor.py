@@ -7,12 +7,9 @@ from pathlib import Path
 from datetime import datetime
 import math
 import sys
-
-
 import board
 import busio
 import adafruit_mpu6050
-
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 
