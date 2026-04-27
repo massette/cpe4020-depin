@@ -13,7 +13,7 @@ from lib.keys import Symmetric, Public, Private
 from lib.parse import Message
 from lib.bytes import concat
 
-from ledger import load_ledger
+from ledger import load_ledger, add_block
 
 ################################################################ NODE DETAILS ##
 NODE_ID = sys.argv[1]
@@ -298,7 +298,8 @@ def handle_validator(tcp):
             print("Reject! Missing required field.")
             decision = Type.BAD
         else:
-            delta = data["timestamp"] - now
+            start_time = datetime.strptime(data["timestamp"])
+            delta = start_time - now
 
             if ((delta < timedelta(seconds=0))
                 or (delta > timedelta(seconds=30))):
@@ -365,7 +366,7 @@ def handle_validator(tcp):
             #checking the timestamp
             start_time = datetime.fromisoformat(data["timestamp"])
             delta = start_time - now
-            
+
             if ((delta < timedelta(seconds=0))
                 or (delta > timedelta(seconds=5))):
                 print("Reject! Bad timestamp.")

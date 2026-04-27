@@ -1,4 +1,3 @@
-#add this to import ledger "from ledger import add_block"
 import json
 import os
 
@@ -21,7 +20,7 @@ def save_ledger(ledger):
 
 
 def hash_block(block):
-    block_string = json.dumps(block_copy, sort_keys=True)
+    block_string = json.dumps(block, sort_keys=True)
     return hash(block_string)
 
 
@@ -36,8 +35,10 @@ def add_block(timestamp, from_wallet, to_wallet, validator_id, data, amount=1):
         "validator": validator_id,
         "amount": amount,
         "data": data,
-
-        "previous_hash": pledger[-1]["hash"] if ledger else hash("GENESIS")
+        "previous_hash": (
+            ledger[-1]["hash"]
+            if ledger else hash("GENESIS")
+        )
     }
 
     block["hash"] = hash_block(block)
