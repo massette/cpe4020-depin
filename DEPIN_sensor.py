@@ -129,63 +129,55 @@ while True:
         print(f"Lock rotation detected! Change: {diff:.1f}° (prev {prev_angle:.1f} -> now {current_angle:.1f})")
 
         # build the payload we're gonna send to the validator
-        # includes all the juicy data about what happened and who we are
         payload = {
-#            "type": "mint",
-#            "from": "sensor_node",
-#            "to": key.reveal(),
-#            "amount": COINS_PER_EVENT,
             "node_id": NODE_ID,
-#            "data": {
             "event": "lock_rotation",
             "angle_change_deg": round(diff, 1),
             "prev_angle_deg": round(prev_angle, 1),
             "angle_deg": round(current_angle, 1),
             "timestamp": time.time(),
-#            },
-#            "timestamp": now,
-#            "pubkey_pem": wallet.pub_pem
         }
 
         # sign the payload so the server knows it's legit and not spoofed
         payload = key.sign(payload)
 
         # try to send it up to 3 times with exponential backoff
-        # because networks are trash sometimes
         try_count = 0
         max_tries = 3
-        backoff = 1.0  # wait 1s, then 2s, then 4s between retries
+        backoff = 1.0
         sent_ok = False
+
         while try_count < max_tries and not sent_ok:
             try:
                 addr = request_validator()
                 mint_uri = "http://{}:6561/mint".format(addr)
 
-                resp = requests.post(mint_uri, payload, headers={"Content-Type": "application/octet-stream"}, timeout=REQUEST_TIMEOUT)
+                # FIX: use data=payload
+                resp = requests.post(
+                    mint_uri,
+                    data=payload,
+                    headers={"Content-Type": "application/octet-stream"},
+                    timeout=REQUEST_TIMEOUT
+                )
 
                 if resp.status_code == 200:
-                    # we got paid let's gooo
                     print(f"Mint request accepted; requested {COINS_PER_EVENT} coins.")
                     last_event_time = now
                     sent_ok = True
                 else:
-                    # server said no for some reason, log it and retry
                     print(f"Validator rejected: [{resp.status_code}] {resp.text}")
                     try_count += 1
                     time.sleep(backoff)
-                    backoff *= 2  # wait longer each time
+                    backoff *= 2
+
             except Exception as e:
-                # network died or timed out
                 print(f"Network error sending to validator: {e}")
                 try_count += 1
                 time.sleep(backoff)
                 backoff *= 2
+
         if not sent_ok:
-            # gave up after 3 tries, oh well, maybe next rotation
             print("Failed to send mint request after retries.")
 
-    # update the baseline angle every loop tick
     prev_angle = current_angle
-    # poll 10 times per second, don't need faster than that
     time.sleep(0.1)
-    # save da world, my final message goodbye
