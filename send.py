@@ -11,7 +11,7 @@ from lib.parse import Message
 from lib.bytes import concat
 
 ################################################################ NODE DETAILS ##
-NODE_ID = sys.argv[1]
+NODE_ID = sys.argv[1] if len(sys.argv) > 1 else "W01"
 NODE_ADDR = Address.WALLETS[NODE_ID]
 
 ############################################################# ENCRYPTION KEYS ##
