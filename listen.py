@@ -26,7 +26,6 @@ keys["validators"] = Symmetric("keys/validator.sym")
 
 # initialize wallets
 wallets = {}
-keys = {}
 
 for w in Address.WALLETS:
     keys[w] = Public("keys/{}.pub.pem".format(w))
