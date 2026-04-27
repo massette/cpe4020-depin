@@ -12,7 +12,6 @@ from lib.bytes import concat
 
 ################################################################ NODE DETAILS ##
 NODE_ID = sys.argv[1]
-NODE_ADDR = Address.WALLETS[NODE_ID]
 
 ############################################################# ENCRYPTION KEYS ##
 keys = {}
@@ -27,7 +26,6 @@ def request_validator():
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
         # create TCP channel to listen for response
-        tcp.bind(Address.WALLETS[NODE_ID])
         tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         tcp.listen()
 

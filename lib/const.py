@@ -18,15 +18,7 @@ class Type(Enum):
         return "'" + self.name + "'"
 
 class Address:
-    # address of pi miner
-    PI_HOST = ipaddress.ip_interface("10.167.29.119/24")
-    PI_IP = str(PI_HOST.ip)
-
-    # address of other wallet
-    OTHER_HOST = ipaddress.ip_interface("10.167.29.119/24")
-    OTHER_IP = str(OTHER_HOST.ip)
-
-    # shared address of validators
+    # shared validator host
     VALIDATOR_HOST = ipaddress.ip_interface("10.100.153.11/18")
     VALIDATOR_IP = str(VALIDATOR_HOST.ip)
 
@@ -34,6 +26,7 @@ class Address:
     NETWORK_IP = str(VALIDATOR_HOST.network)
     BROADCAST_IP = str(VALIDATOR_HOST.network.broadcast_address)
 
+    # assign ports to validators
     VALIDATORS = {
         "V01": (VALIDATOR_IP, 6562),
         "V02": (VALIDATOR_IP, 6563),
@@ -45,9 +38,5 @@ class Address:
 #        "V08": (VALIDATOR_IP, 6569),
     }
 
-    WALLETS = {
-        "W01": (PI_IP, 0),
-        "W02": (OTHER_IP, 0),
-    }
-
+    WALLETS = ( "W01", "W02" )
     BROADCAST = (BROADCAST_IP, 6560)
