@@ -1,0 +1,79 @@
+body {
+    font-family: Arial;
+    background: #0f172a;
+    color: white;
+    text-align: center;
+}
+
+h1 {
+    margin: 20px;
+}
+
+.container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    padding: 20px;
+}
+
+.card {
+    background: #1e293b;
+    padding: 20px;
+    border-radius: 10px;
+    width: 300px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+li {
+    margin: 8px 0;
+}
+
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+}
+
+.stats {
+    display: flex;
+    gap: 10px;
+}
+
+.stat-card {
+    background: #1e293b;
+    padding: 10px;
+    border-radius: 10px;
+    min-width: 120px;
+}
+
+.stat-card h3 {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.stat-card p {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.top-right {
+    text-align: right;
+}
+
+#clock {
+    font-size: 16px;
+}
+
+.status {
+    background: #065f46;
+    padding: 5px 10px;
+    border-radius: 10px;
+    font-size: 13px;
+}
