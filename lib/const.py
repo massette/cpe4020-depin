@@ -1,43 +1,47 @@
 import ipaddress
 from enum import Enum
 
+
 class Time:
     TIMEOUT = 15.00
     POLL = 0.10
 
-class Type(Enum):
-    REQ = 1 # 001
-    ACK = 3 # 011
-    TKN = 2 # 010
-    VAL = 6 # 110
-    DON = 7 # 111
-    MOV = 5 # 101
 
-    BAD = 0 # 000
+class Type(Enum):
+    REQ = 1
+    ACK = 3
+    TKN = 2
+    VAL = 6
+    DON = 7
+    BAD = 0
 
     def __str__(self):
         return "'" + self.name + "'"
 
+
 class Address:
-    # shared validator host
-    VALIDATOR_HOST = ipaddress.ip_interface("10.100.153.11/18")
-    VALIDATOR_IP = str(VALIDATOR_HOST.ip)
+    # your Raspberry Pi (sensor + validator V01)
+    PI_HOST = ipaddress.ip_interface("10.167.29.157/24")
+    PI_IP = str(PI_HOST.ip)
 
-    # derived network information
-    NETWORK_IP = str(VALIDATOR_HOST.network)
-    BROADCAST_IP = str(VALIDATOR_HOST.network.broadcast_address)
+    # your computer (validator V02)
+    PC_HOST = ipaddress.ip_interface("10.167.29.119/24")
+    PC_IP = str(PC_HOST.ip)
 
-    # assign ports to validators
+    # network info
+    NETWORK_IP = str(PI_HOST.network)
+    BROADCAST_IP = str(PI_HOST.network.broadcast_address)
+
+    # ✅ VALIDATORS (MUST MATCH ON BOTH MACHINES)
     VALIDATORS = {
-        "V01": (VALIDATOR_IP, 6562),
-        "V02": (VALIDATOR_IP, 6563),
-        "V03": (VALIDATOR_IP, 6564),
-#        "V04": (VALIDATOR_IP, 6565),
-#        "V05": (VALIDATOR_IP, 6566),
-#        "V06": (VALIDATOR_IP, 6567),
-#        "V07": (VALIDATOR_IP, 6568),
-#        "V08": (VALIDATOR_IP, 6569),
+        "V01": ("10.167.29.157", 6560),  # Pi
+        "V02": ("10.167.29.34", 6560),  # your computer
     }
 
-    WALLETS = ( "W01", "W02" )
-    BROADCAST = (BROADCAST_IP, 6560)
+    # wallet (sensor node)
+    WALLETS = {
+        "W01": ("10.167.29.157", 6562),
+    }
+
+    # UDP broadcast for discovery
+    BROADCAST = (BROADCAST_IP, 6561)
