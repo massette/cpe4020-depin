@@ -22,7 +22,7 @@ def save_ledger(ledger):
 
 def hash_block(block):
     block_string = json.dumps(block_copy, sort_keys=True)
-    return hash(block_string) hashlib.sha256(block_string.encode()).hexdigest()
+    return hash(block_string)
 
 
 def add_block(timestamp, from_wallet, to_wallet, validator_id, data, amount=1):

@@ -1,6 +1,5 @@
 import sys
 import time
-from datetime import datetime, timedelta
 import socket
 import select
 import secrets
@@ -25,13 +24,14 @@ wallets = {}
 keys = {}
 
 for w in Address.WALLETS:
-    keys = Public("keys/{}.pub.pem".format(w))
+    keys[w] = Public("keys/{}.pub.pem".format(w))
     addr = keys[w].reveal()
     wallets[addr] = 0
 
 # load previous transactions
 def update_transactions():
-    global transactions = load_ledger()
+    global transactions
+    transactions = load_ledger()
 
     for block in transactions:
         if block["from"] != "MINT":
