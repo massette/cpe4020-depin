@@ -19,6 +19,16 @@ def save_ledger(ledger):
         json.dump(ledger, f, indent=4)
 
 
+def make_json_safe(value):
+    if isinstance(value, bytes):
+        return value.hex()
+    if isinstance(value, dict):
+        return {k: make_json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [make_json_safe(v) for v in value]
+    return value
+
+
 def hash_block(block):
     block_string = json.dumps(block, sort_keys=True)
     return hash(block_string)
@@ -30,16 +40,15 @@ def add_block(timestamp, from_wallet, to_wallet, validator_id, data, amount=1):
     block = {
         "index": len(ledger) + 1,
         "timestamp": timestamp,
-        "from": str(from_wallet),
-        "to": str(to_wallet),
-        "validator": validator_id,
+        "from": make_json_safe(from_wallet),
+        "to": make_json_safe(to_wallet),
+        "validator": make_json_safe(validator_id),
         "amount": amount,
-        "data": data,
-
-        "previous_hash": (
-            hash_block(ledger[-1]["hash"]) if ledger else hash("GENESIS")
-        )
+        "data": make_json_safe(data),
+        "previous_hash": ledger[-1]["hash"] if ledger else hash("GENESIS"),
     }
+
+    block["hash"] = hash_block(block)
 
     ledger.append(block)
     save_ledger(ledger)
