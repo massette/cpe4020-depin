@@ -1,11 +1,10 @@
-import time
 import json
 import requests
 import os
 from datetime import datetime
 import math
 import sys
-
+import time
 from send import request_validator
 
 # Pi 5 uses smbus2 directly instead of board like vro really...
@@ -142,7 +141,7 @@ while True:
             "angle_change_deg": round(diff, 1),
             "prev_angle_deg": round(prev_angle, 1),
             "angle_deg": round(current_angle, 1),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": time.time(),
 #            },
 #            "timestamp": now,
 #            "pubkey_pem": wallet.pub_pem
