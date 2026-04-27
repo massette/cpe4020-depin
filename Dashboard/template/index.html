@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DePIN Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+<h1>🚀 DePIN Dashboard</h1>
+
+<div class="top-bar">
+
+    <div class="stats">
+        <div class="stat-card">
+            <h3>Total Supply</h3>
+            <p id="totalSupply">0</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Total Wallets</h3>
+            <p id="totalWallets">0</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Total Transactions</h3>
+            <p id="totalTransactions">0</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Active Nodes</h3>
+            <p id="activeNodes">0</p>
+        </div>
+    </div>
+
+    <div class="top-right">
+        <div id="clock"></div>
+        <div class="status">🟢 Network Active</div>
+    </div>
+</div>
+
+
+
+<div class="container">
+
+    <div class="card">
+        <h2>⚡ Activity Feed</h2>
+        <ul id="activity"></ul>
+    </div>
+
+    <div class="card">
+        <h2>Wallets</h2>
+        <ul id="wallets"></ul>
+    </div>
+
+    <div class="card">
+        <h2>Transactions</h2>
+        <ul id="transactions"></ul>
+    </div>
+
+    <div class="card">
+        <h2>Validators</h2>
+        <ul id="validators"></ul>
+    </div>
+
+</div>
+
+<script src="/static/script.js"></script>
+</body>
+</html>
