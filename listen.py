@@ -13,6 +13,8 @@ from lib.keys import Symmetric, Public, Private
 from lib.parse import Message
 from lib.bytes import concat
 
+from ledger import add_block
+
 ################################################################ NODE DETAILS ##
 NODE_ID = sys.argv[1]
 NODE_ADDR = Address.VALIDATORS[NODE_ID]
