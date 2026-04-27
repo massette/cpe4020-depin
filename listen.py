@@ -151,6 +151,16 @@ class Session:
         print("=================================================")
         print()
 
+        # mint token
+        if self.consensus == Type.TKN:
+            add_block(
+                self.timestamp,
+                b"MINT",
+                keys[self.session[0]].reveal(),
+                NODE_ID,
+                self.data
+            )
+
         # mark session complete
         sessions.pop(self.session)
         done.add(self.session)
