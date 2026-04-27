@@ -2,12 +2,11 @@ import time
 import json
 import requests
 import os
-from pathlib import Path
 from datetime import datetime
 import math
 import sys
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
+
+from send import request_validator
 
 # Pi 5 uses smbus2 directly instead of board/busio
 import smbus2
@@ -27,7 +26,7 @@ MIN_EVENT_GAP = 3.0                # seconds
 ROTATION_THRESHOLD_MIN = 30        # degrees
 ROTATION_THRESHOLD_MAX = 180
 # where we save our crypto wallet key so we don't lose our money on reboot
-WALLET_PATH = Path("wallet.pem")
+NODE_ID = "W01"
 # how long to wait if i2c dies before trying again
 I2C_RETRY_DELAY = 2.0
 # dont wait forever for the server to respond
@@ -37,61 +36,10 @@ REQUEST_TIMEOUT = 5.0
 I2C_BUS = 1
 MPU6050_ADDR = 0x68  # default address for the sensor, look it up
 
-# WALLET CLASS
-# this handles our crypto keys so we can prove its actually us sending the coin requests
-# basically if you delete wallet.pem you lose your identity, don't do that
-class PiWallet:
-    def __init__(self, path: Path = WALLET_PATH):
-        self.path = path
-        # if we already have a key saved, just load it back up
-        if self.path.exists():
-            with open(self.path, "rb") as f:
-                self.private_key = serialization.load_pem_private_key(f.read(), password=None)
-            print("Loaded existing Pi wallet key.")
-        else:
-            # first time running - gotta make a brand new key pair
-            self.private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-            pem = self.private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            )
-            # save the key to disk so we don't lose it on restart
-            with open(self.path, "wb") as f:
-                f.write(pem)
-            try:
-                # make it so only we can read the key file, security 101
-                os.chmod(self.path, 0o600)
-            except Exception:
-                pass  # windows probably, whatever
-            print(f"Created new Pi wallet and saved key to {self.path}")
+# WALLET KEY
+key = Private("keys/{}.prv.pem".format(NODE_ID))
 
-        # derive the public key from the private key (math magic)
-        self.public_key = self.private_key.public_key()
-        pub_bytes = self.public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-        # hash the public key to get our "address" - like a username but cryptographic
-        h = hashes.Hash(hashes.SHA256())
-        h.update(pub_bytes)
-        self.address = h.finalize().hex()
-        self.pub_pem = pub_bytes.decode('utf-8')
-        print(f"Pi Wallet Address: {self.address}")
-
-    def sign_message(self, message_dict):
-        # turn the dict into bytes so we can sign it
-        # sort_keys=True so the signature is always the same for same data
-        message_bytes = json.dumps(message_dict, sort_keys=True).encode('utf-8')
-        # sign it with our private key - proves it came from us
-        signature = self.private_key.sign(
-            message_bytes,
-            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
-            hashes.SHA256()
-        )
-        return signature
-
-# SENSOR SETUP i wonder what else to title it Sean tap in
+# SENSOR SETUP
 # try to connect to the gyroscope/accelerometer and die loudly if we can't
 # no point running the program without the sensor lmao
 def init_mpu_or_exit():
@@ -145,7 +93,7 @@ print("Starting mamabeanie on Raspberry Pi 5...")
 
 # boot up the sensor, exits the whole program if it fails
 mpu = init_mpu_or_exit()
-wallet = PiWallet()
+# wallet = PiWallet()
 
 # take 8 readings at startup and average them for a stable baseline angle
 # one reading can be noisy, 8 is better
@@ -183,24 +131,24 @@ while True:
         # build the payload we're gonna send to the validator
         # includes all the juicy data about what happened and who we are
         payload = {
-            "type": "mint",
-            "from": "sensor_node",
-            "to": wallet.address,
-            "amount": COINS_PER_EVENT,
-            "data": {
-                "event": "lock_rotation",
-                "angle_change_deg": round(diff, 1),
-                "prev_angle_deg": round(prev_angle, 1),
-                "angle_deg": round(current_angle, 1),
-                "timestamp": datetime.utcnow().isoformat() + "Z"
-            },
-            "timestamp": now,
-            "pubkey_pem": wallet.pub_pem
+#            "type": "mint",
+#            "from": "sensor_node",
+#            "to": key.reveal(),
+#            "amount": COINS_PER_EVENT,
+            "node_id": NODE_ID,
+#            "data": {
+            "event": "lock_rotation",
+            "angle_change_deg": round(diff, 1),
+            "prev_angle_deg": round(prev_angle, 1),
+            "angle_deg": round(current_angle, 1),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+#            },
+#            "timestamp": now,
+#            "pubkey_pem": wallet.pub_pem
         }
 
         # sign the payload so the server knows it's legit and not spoofed
-        signature = wallet.sign_message(payload)
-        payload["signature"] = signature.hex()
+        payload = key.sign(payload)
 
         # try to send it up to 3 times with exponential backoff
         # because networks are trash sometimes
@@ -210,7 +158,11 @@ while True:
         sent_ok = False
         while try_count < max_tries and not sent_ok:
             try:
-                resp = requests.post(VALIDATOR_URL, json=payload, timeout=REQUEST_TIMEOUT)
+                addr = request_validator()
+                mint_uri = "http://{}:6561/mint"
+
+                resp = requests.post(mint_uri, payload, headers={"Content-type": "octet-stream"}, timeout=REQUEST_TIMEOUT)
+
                 if resp.status_code == 200:
                     # we got paid let's gooo
                     print(f"Mint request accepted; requested {COINS_PER_EVENT} coins.")

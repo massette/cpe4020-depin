@@ -18,7 +18,7 @@ class Type(Enum):
         return "'" + self.name + "'"
 
 class Address:
-    HOST = ipaddress.ip_interface("11.24.7.23/21")
+    HOST = ipaddress.ip_interface("10.167.29.119/24")
     HOST_IP = str(HOST.ip)
     HOST_NETWORK = str(HOST.network)
     HOST_BROADCAST = str(HOST.network.broadcast_address)

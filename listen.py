@@ -253,8 +253,11 @@ def handle_validator(tcp):
         tkn.apply(keys[wallet_id].unsign)
         data = tkn.as_json()
 
-        # TODO
         decision = Type.TKN
+
+        if (data < 0) or (data > 360):
+            # invalid angle
+            decision = Type.BAD
 
         # update session
         session.add_decision(NODE_ID, decision)
