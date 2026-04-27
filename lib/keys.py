@@ -13,7 +13,7 @@ def hash(*parts):
     digest = hashes.Hash(hashes.SHA256())
     digest.update(message)
 
-    return digest.finalize().hex()
+    return digest.finalize()
 
 class Public:
     # load and manage the public key of an RSA key pair
