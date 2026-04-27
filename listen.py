@@ -13,7 +13,7 @@ from lib.keys import Symmetric, Public, Private
 from lib.parse import Message
 from lib.bytes import concat
 
-from ledger import add_block
+from ledger import load_ledger, add_block
 
 ################################################################ NODE DETAILS ##
 NODE_ID = sys.argv[1]
@@ -24,8 +24,27 @@ keys = {}
 keys["self"] = Private("keys/validator.prv.pem")
 keys["validators"] = Symmetric("keys/validator.sym")
 
-keys["W01"] = Public("keys/W01.pub.pem")
-keys["W02"] = Public("keys/W02.pub.pem")
+# initialize wallets
+wallets = {}
+keys = {}
+
+for w in Address.WALLETS:
+    keys[w] = Public("keys/{}.pub.pem".format(w))
+    addr = keys[w].reveal()
+    wallets[addr] = 0
+
+# load previous transactions
+def update_transactions():
+    global transactions
+    transactions = load_ledger()
+
+    for block in transactions:
+        if block["from"] != "MINT":
+            wallets[block["from"]] -= block["amount"]
+        
+        wallets[block["to"]] += block["amount"]
+
+update_transactions()
 
 ############################################################# SESSION DETAILS ##
 class Session:
@@ -285,21 +304,28 @@ def handle_validator(tcp):
             if ((delta < timedelta(seconds=0))
                 or (delta > timedelta(seconds=30))):
                 print("Reject! Bad timestamp.")
+
             elif data["event"] == "lock_rotation":
                 if (("angle_change_deg" not in data)
                     or ("prev_angle_deg" not in data)
                     or ("angle_deg" not in data)):
                     print("Reject! Missing event-specific field.")
                     decision = Type.BAD
+
                 elif ((data["angle_deg"] < 0)
                       or (data["angle_deg"] > 360)):
                     print("Reject! Bad angle.")
                     decision = Type.BAD
+
                 else:
                     expected = data["prev_angle_deg"] + data["angle_change_deg"]
+
                     if data["angle_deg"] != expected:
                         print("Reject! Angles do not add up.")
                         decision = Type.BAD
+                    else:
+                        print("Transfer approved.")
+
             else:
                 print("Reject! Invalid sensor event.")
                 decision = Type.BAD
@@ -317,6 +343,53 @@ def handle_validator(tcp):
             )
 
             send_others(val)
+
+    elif msg.type == Type.MOV:
+        # parse TKN, new data to validate
+        mov = msg.as_type(Type.MOV)
+        
+        # store signed data
+        session.set_data(mov.body)
+
+        # validate data
+        mov.apply(keys[wallet_id].unsign)
+        data = mov.as_json()
+        #checking for correct formatting
+        if (("node_id" not in data)
+            or ("recipient" not in data)
+            or ("timestamp" not in data)
+            or ("amount" not in data)):
+            print("Reject! Missing required field.")
+            decision = Type.BAD
+
+        else:
+            #checking the timestamp
+            start_time = datetime.fromisoformat(data["timestamp"])
+            delta = start_time - now
+
+            if ((delta < timedelta(seconds=0))
+                or (delta > timedelta(seconds=5))):
+                print("Reject! Bad timestamp.")
+
+               # Check recipient exists
+            elif data["recipient"] not in wallets:
+                print("Reject! Recipient wallet does not exist.")
+                decision = Type.BAD            
+
+            # Check amount is valid
+            elif data["amount"] <= 0:
+                print("Reject! Invalid amount.")
+                decision = Type.BAD  
+
+            else:
+                addr = keys[wallet_id].reveal()
+
+                # Check sender has enough funds
+                if wallets[addr] < data["amount"]:
+                    print("Reject! Insufficient funds.")
+                    decision = Type.BAD
+                else:
+                    print("Transfer approved.")
 
     elif msg.type == Type.VAL:
         # parse VAL, intermediate validator decision
