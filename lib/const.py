@@ -6,13 +6,14 @@ class Time:
     POLL = 0.10
 
 class Type(Enum):
-    REQ = 1
-    ACK = 3
-    TKN = 2
-    VAL = 6
-    DON = 7
+    REQ = 1 # 001
+    ACK = 3 # 011
+    TKN = 2 # 010
+    VAL = 6 # 110
+    DON = 7 # 111
+    MOV = 5 # 101
 
-    BAD = 0
+    BAD = 0 # 000
 
     def __str__(self):
         return "'" + self.name + "'"

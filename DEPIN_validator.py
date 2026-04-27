@@ -8,38 +8,12 @@ from flask import Flask, jsonify, render_template, request
 from cryptography.exceptions import InvalidSignature
 
 from lib.const import Time, Type, Address
-from lib.keys import Public
-from lib.parse import Message
 from lib.bytes import concat
-
-from ledger import load_ledger
 
 app = Flask(__name__)
 
 # initialize validators
 validators = list(Address.VALIDATORS.keys())
-
-# initialize wallets
-wallets = {}
-keys = {}
-
-for w in Address.WALLETS:
-    keys[w] = Public("keys/{}.pub.pem".format(w))
-    addr = keys[w].reveal()
-    wallets[addr] = 0
-
-# load previous transactions
-def update_transactions():
-    global transactions
-    transactions = load_ledger()
-
-    for block in transactions:
-        if block["from"] != "MINT":
-            wallets[block["from"]] -= block["amount"]
-        
-        wallets[block["to"]] += block["amount"]
-
-update_transactions()
 
 ################################################################ NODE DETAILS ##
 # parse arguments
@@ -62,7 +36,7 @@ NODE_ID = sys.argv[1]
 NODE_ADDR = Address.VALIDATORS[NODE_ID]
 
 ################################################################ POLL SOCKETS ##
-from listen import poll, send_all, pending
+from listen import poll, send_all, update_transactions, wallets, keys, pending
 
 # run on separate thread
 sockets_thread = Thread(target=poll, args=(NODE_ADDR,))
@@ -139,6 +113,48 @@ def get_transactions():
 @app.route("/validators")
 def get_validators():
     return jsonify(validators)
+
+@app.post("/move")
+def post_move():
+    payload = request.data
+
+    # identify which wallet signed it
+    wallet_id = None
+
+    for w in Address.WALLETS:
+        try:
+            keys[w].unsign(payload)
+            wallet_id = w
+            break
+        except InvalidSignature:
+            continue
+
+    if wallet_id is None:
+        return "Could not verify signature.", 400
+
+    # create session
+    session_id = secrets.randbits(32)
+
+    while (wallet_id, session_id) in pending:
+        session_id = secrets.randbits(32)
+
+    pending[wallet_id, session_id] = Event()
+    # send EXACT payload to validators (just like mint)
+    mov = concat(
+        Type.MOV,
+        keys["validators"].encrypt(wallet_id, session_id, payload)
+    )
+
+    send_all(mov)
+
+    is_done = pending[wallet_id, session_id].wait(Time.TIMEOUT)
+    pending.pop((wallet_id, session_id))
+
+    if is_done:
+        update_transactions()
+        return jsonify(transactions[-1]), 200
+
+    return "Move request timed out.", 408
 
 ############################################################### LAUNCH SERVER ##
 if __name__ == "__main__":
