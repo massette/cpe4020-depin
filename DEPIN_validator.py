@@ -142,4 +142,4 @@ def get_validators():
 
 ############################################################### LAUNCH SERVER ##
 if __name__ == "__main__":
-    app.run(debug=True, host=Address.VALIDATOR_IP, port=6561)
+    app.run(host=Address.VALIDATOR_IP, port=6561)

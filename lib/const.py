@@ -27,12 +27,12 @@ class Address:
     OTHER_IP = str(OTHER_HOST.ip)
 
     # shared address of validators
-    VALIDATOR_HOST = ipaddress.ip_interface("10.167.29.119/24")
+    VALIDATOR_HOST = ipaddress.ip_interface("10.100.153.11/18")
     VALIDATOR_IP = str(VALIDATOR_HOST.ip)
 
     # derived network information
-    NETWORK_IP = str(PI_HOST.network)
-    BROADCAST_IP = str(PI_HOST.network.broadcast_address)
+    NETWORK_IP = str(VALIDATOR_HOST.network)
+    BROADCAST_IP = str(VALIDATOR_HOST.network.broadcast_address)
 
     VALIDATORS = {
         "V01": (VALIDATOR_IP, 6562),
@@ -50,4 +50,4 @@ class Address:
         "W02": (OTHER_IP, 0),
     }
 
-    BROADCAST = (BROADCAST_IP, 6561)
+    BROADCAST = (BROADCAST_IP, 6560)
