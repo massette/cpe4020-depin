@@ -142,7 +142,7 @@ while True:
             "angle_change_deg": round(diff, 1),
             "prev_angle_deg": round(prev_angle, 1),
             "angle_deg": round(current_angle, 1),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.utcnow().isoformat(),,
 #            },
 #            "timestamp": now,
 #            "pubkey_pem": wallet.pub_pem
@@ -160,9 +160,9 @@ while True:
         while try_count < max_tries and not sent_ok:
             try:
                 addr = request_validator()
-                mint_uri = "http://{}:6561/mint"
+                mint_uri = "http://{}:6561/mint".format(addr)
 
-                resp = requests.post(mint_uri, payload, headers={"Content-type": "octet-stream"}, timeout=REQUEST_TIMEOUT)
+                resp = requests.post(mint_uri, payload, headers={"Content-Type": "application/octet-stream"}, timeout=REQUEST_TIMEOUT)
 
                 if resp.status_code == 200:
                     # we got paid let's gooo
