@@ -279,7 +279,7 @@ def handle_validator(tcp):
             print("Reject! Missing required field.")
             decision = Type.BAD
         else:
-            start_time = datetime.strptime(data["timestamp"])
+            start_time = datetime.fromisoformat(data["timestamp"])
             delta = start_time - now
 
             if ((delta < timedelta(seconds=0))
