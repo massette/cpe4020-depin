@@ -2,23 +2,85 @@ from flask import Flask, jsonify, render_template, request
 import time
 import random
 
+from lib.const import Address
+from lib.keys import Public
+
+from ledger import load_ledger
+
 app = Flask(__name__)
 
+# initialize validators
+validators = Address.VALIDATORS.keys()
 
-wallets = [
-    {"address": "node1", "balance": 50},
-    {"address": "node2", "balance": 20}
-]
+# initialize wallets
+wallets = {}
 
-transactions = []
-activity_log = []
+for w in Address.WALLETS:
+    addr = Public("keys/{}.pub.pem".format(w)).reveal()
+    wallets[addr] = 0
 
-validators = ["V01", "V02", "V03"]
+# load previous transactions
+def update_transactions():
+    global transactions = load_ledger()
+
+    for block in transactions:
+        if block["from"] != "MINT":
+            wallets[block["from"]] -= block["amount"]
+        
+        wallets[block["to"]] += block["amount"]
 
 
 @app.route("/")
 def home():
     return render_template("index.html")
+
+@app.post("/mint")
+def post_transaction():
+    payload = request.data
+
+    # check signature against each wallet key
+    wallet_id = None
+
+    for w in Address.WALLETS:
+        try:
+            keys[w].unsign(payload)
+            wallet_id = w
+            break
+        except InvalidSignature:
+            # wrong key, try again
+            continue
+
+    # fail if no key matched
+    if wallet_id == None:
+        return "Could not verify signature.", 400
+
+    # generate unique session id
+    session_id = secrets.randbits(32)
+
+    while (wallet_id, session_id) in pending:
+        session_id = secrets.randbits(32)
+
+    # 
+    pending[wallet_id, session_id] = Event()
+
+    # format signed mint request as TKN
+    tkn = concat(
+        Type.TKN,
+        keys["validators"].encrypt(wallet_id, session_id, payload)
+    )
+
+    # echo TKN to all validators
+    send_all(tkn)
+
+    # await end of session
+    is_done = pending[wallet_id, session_id].wait(Time.TIMEOUT)
+    pending.pop((wallet_id, session_id))
+
+    if is_done:
+        update_transactions()
+        return jsonify(transactions[-1]), 200
+    else:
+        return "Request timed out.", 408
 
 @app.route("/wallets")
 def get_wallets():
@@ -28,49 +90,9 @@ def get_wallets():
 def get_transactions():
     return jsonify(transactions)
 
-@app.route("/activity")
-def get_activity():
-    return jsonify(activity_log)
-
 @app.route("/validators")
 def get_validators():
     return jsonify(validators)
-
-
-@app.route("/mint", methods=["POST"])
-def mint():
-    data = request.json
-
-    # pick validator (simulated consensus)
-    validator = random.choice(validators)
-
-    # create transaction
-    tx = {
-        "from": data["from"],
-        "to": data["to"],
-        "amount": data["amount"],
-        "timestamp": time.time(),
-        "validator": validator
-    }
-    transactions.insert(0, tx)
-
-    # update wallet
-    found = False
-    for w in wallets:
-        if w["address"] == data["to"]:
-            w["balance"] += data["amount"]
-            found = True
-
-    if not found:
-        wallets.append({
-            "address": data["to"],
-            "balance": data["amount"]
-        })
-
-    # activity log
-    activity_log.insert(0, f"{validator} approved mint → {data['amount']} coins to {data['to']}")
-
-    return {"status": "ok"}
 
 # -----------------------------
 if __name__ == "__main__":
