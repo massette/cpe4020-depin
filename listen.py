@@ -177,7 +177,7 @@ class Session:
         if self.consensus == Type.TKN:
             add_block(
                 self.timestamp,
-                b"MINT",
+                "MINT",
                 keys[self.session[0]].reveal(),
                 NODE_ID,
                 self.data

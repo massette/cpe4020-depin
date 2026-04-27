@@ -28,7 +28,7 @@ class Public:
                 encoding=Encoding.PEM,
                 format=PublicFormat.SubjectPublicKeyInfo
             )
-        )
+        ).hex()
 
     # encrypt a list of byte-like objects with the key
     def encrypt(self, *parts):

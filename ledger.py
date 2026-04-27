@@ -5,7 +5,6 @@ from lib.keys import hash
 
 LEDGER_FILE = "ledger.json"
 
-
 def load_ledger():
     if not os.path.exists(LEDGER_FILE):
         return []
@@ -13,26 +12,13 @@ def load_ledger():
     with open(LEDGER_FILE, "r") as f:
         return json.load(f)
 
-
 def save_ledger(ledger):
     with open(LEDGER_FILE, "w") as f:
         json.dump(ledger, f, indent=4)
 
-
-def make_json_safe(value):
-    if isinstance(value, bytes):
-        return value.hex()
-    if isinstance(value, dict):
-        return {k: make_json_safe(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [make_json_safe(v) for v in value]
-    return value
-
-
 def hash_block(block):
     block_string = json.dumps(block, sort_keys=True)
     return hash(block_string)
-
 
 def add_block(timestamp, from_wallet, to_wallet, validator_id, data, amount=1):
     ledger = load_ledger()
@@ -40,11 +26,11 @@ def add_block(timestamp, from_wallet, to_wallet, validator_id, data, amount=1):
     block = {
         "index": len(ledger) + 1,
         "timestamp": timestamp,
-        "from": make_json_safe(from_wallet),
-        "to": make_json_safe(to_wallet),
-        "validator": make_json_safe(validator_id),
+        "from": from_wallet,
+        "to": to_wallet,
+        "validator": validator_id,
         "amount": amount,
-        "data": make_json_safe(data),
+        "data": data.encode(),
         "previous_hash": ledger[-1]["hash"] if ledger else hash("GENESIS"),
     }
 
