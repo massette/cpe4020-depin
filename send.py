@@ -11,7 +11,7 @@ from lib.parse import Message
 from lib.bytes import concat
 
 ################################################################ NODE DETAILS ##
-NODE_ID = sys.argv[1] if len(sys.argv) > 1 else "W01"
+NODE_ID = sys.argv[1]
 
 ############################################################# ENCRYPTION KEYS ##
 keys = {}
@@ -26,6 +26,7 @@ def request_validator():
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
         # create TCP channel to listen for response
+        tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         tcp.listen()
 
         # make REQ
@@ -67,7 +68,7 @@ if __name__ == "__main__":
 
     while True:
         raw = input("> ")
-
+        
         if raw.strip() == "":
             break
 
