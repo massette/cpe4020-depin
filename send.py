@@ -3,6 +3,7 @@ import socket
 import secrets
 import requests
 import json
+from datetime import datetime, UTC
 
 from lib.const import Type, Address
 from lib.error import AppException
@@ -66,13 +67,26 @@ if __name__ == "__main__":
     addr = request_validator()
     mint_uri = "http://{}:6561/mint".format(addr)
 
-    while True:
-        raw = input("> ")
-        
-        if raw.strip() == "":
-            break
+    data = json.dumps({
+        "node_id": NODE_ID,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "event": "lock_rotation",
 
-        data = json.dumps({ "test": raw })
-        payload = keys["self"].sign(data)
+        "angle_change_deg": 20,
+        "prev_angle_deg": 40,
+        "angle_deg": 60,
+    })
 
-        requests.post(mint_uri, payload)
+    payload = keys["self"].sign(data)
+    requests.post(mint_uri, payload)
+
+#    while True:
+#        raw = input("> ")
+#        
+#        if raw.strip() == "":
+#            break
+#
+#        data = json.dumps({ "test": raw })
+#        payload = keys["self"].sign(data)
+#
+#        requests.post(mint_uri, payload)

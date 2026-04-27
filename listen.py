@@ -2,7 +2,7 @@ import sys
 import time
 import socket
 import select
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from threading import Thread
 from flask import Flask, request
 from random import shuffle
@@ -253,7 +253,7 @@ def handle_request(udp):
 # handle message from validator
 def handle_validator(tcp):
     # record time at start of transaction
-    now = datetime.now()
+    now = datetime.now(UTC)
 
     # establish connection
     (tcp_val, _) = tcp.accept()
