@@ -2,6 +2,7 @@ import sys
 import time
 import socket
 import select
+from ledger import add_block
 from datetime import datetime, timedelta
 from threading import Thread
 from flask import Flask, request
@@ -13,8 +14,6 @@ from lib.keys import Symmetric, Public, Private
 from lib.parse import Message
 from lib.bytes import concat
 
-from ledger import load_ledger, add_block
-
 ################################################################ NODE DETAILS ##
 NODE_ID = sys.argv[1]
 NODE_ADDR = Address.VALIDATORS[NODE_ID]
@@ -24,27 +23,8 @@ keys = {}
 keys["self"] = Private("keys/validator.prv.pem")
 keys["validators"] = Symmetric("keys/validator.sym")
 
-# initialize wallets
-wallets = {}
-keys = {}
-
-for w in Address.WALLETS:
-    keys[w] = Public("keys/{}.pub.pem".format(w))
-    addr = keys[w].reveal()
-    wallets[addr] = 0
-
-# load previous transactions
-def update_transactions():
-    global transactions
-    transactions = load_ledger()
-
-    for block in transactions:
-        if block["from"] != "MINT":
-            wallets[block["from"]] -= block["amount"]
-        
-        wallets[block["to"]] += block["amount"]
-
-update_transactions()
+keys["W01"] = Public("keys/W01.pub.pem")
+keys["W02"] = Public("keys/W02.pub.pem")
 
 ############################################################# SESSION DETAILS ##
 class Session:
@@ -70,7 +50,7 @@ class Session:
         if self.data:
             print("WARN! Data already set on {}#{}!".format(*self.session))
             return
-        
+
         # update data
         self.data = data
 
@@ -101,7 +81,7 @@ class Session:
 
                     timestamp = time.time()
                     self.add_consensus(NODE_ID, result, timestamp)
-    
+
     def add_consensus(self, validator_id, decision, timestamp):
         # check if validator has already responded
         if validator_id in self.don_received:
@@ -109,13 +89,13 @@ class Session:
                 *self.session)
             )
             return
-        
+
         # check timestamp
         if not self.timestamp:
             self.timestamp = timestamp
         elif timestamp != self.timestamp:
             print("WARN! Multiple consensus on {}#{}!".format(*self.session))
-            
+
             if timestamp < self.timestamp:
                 self.timestamp = timestamp
 
@@ -140,7 +120,7 @@ class Session:
                     *self.session, NODE_ID, self.consensus, self.timestamp
                 )
             )
-            
+
             send_others(don)
         elif decision != self.consensus:
             self.reject()
@@ -206,7 +186,7 @@ def get_session(*session):
 def handle_request(udp):
     # parse REQ
     req = Message.from_socket(udp).as_type(Type.REQ)
-    
+
     # check signature against each wallet key
     wallet_id = None
 
@@ -229,7 +209,7 @@ def handle_request(udp):
 
     # reply on dedicated TCP channel
     ack_address = req.address, port
-    
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_ack:
         tcp_ack.settimeout(Time.TIMEOUT)
         tcp_ack.bind((NODE_ADDR[0], 0))
@@ -237,10 +217,10 @@ def handle_request(udp):
         try:
             # attempt connect
             tcp_ack.connect(ack_address)
-            
+
             # send ACK
             ack = concat(
-                Type.ACK, 
+                Type.ACK,
                 keys[wallet_id].encrypt(NODE_ID, r)
             )
 
@@ -253,7 +233,7 @@ def handle_request(udp):
 # handle message from validator
 def handle_validator(tcp):
     # record time at start of transaction
-    now = datetime.now()
+    now = time.time()
 
     # establish connection
     (tcp_val, _) = tcp.accept()
@@ -262,7 +242,7 @@ def handle_validator(tcp):
         # receive message
         msg = Message.from_socket(tcp_val)
         msg.apply(keys["validators"].decrypt)
-        
+
     # parse session
     wallet_id, session_id = msg.get_fields(str, int)
 
@@ -280,7 +260,7 @@ def handle_validator(tcp):
     if msg.type == Type.TKN:
         # parse TKN, new data to validate
         tkn = msg.as_type(Type.TKN)
-        
+
         # store signed data
         session.set_data(tkn.body)
 
@@ -298,34 +278,28 @@ def handle_validator(tcp):
             print("Reject! Missing required field.")
             decision = Type.BAD
         else:
-            start_time = datetime.fromisoformat(data["timestamp"])
-            delta = start_time - now
+            delta = data["timestamp"] - now
 
-            if ((delta < timedelta(seconds=0))
-                or (delta > timedelta(seconds=30))):
+            if delta < -30 or delta > 30:
                 print("Reject! Bad timestamp.")
-
+                decision = Type.BAD
             elif data["event"] == "lock_rotation":
                 if (("angle_change_deg" not in data)
                     or ("prev_angle_deg" not in data)
                     or ("angle_deg" not in data)):
                     print("Reject! Missing event-specific field.")
                     decision = Type.BAD
-
                 elif ((data["angle_deg"] < 0)
                       or (data["angle_deg"] > 360)):
                     print("Reject! Bad angle.")
                     decision = Type.BAD
+                else:                expected_diff = abs(
+                    (data["angle_deg"] - data["prev_angle_deg"] + 180) % 360 - 180
+                )
 
-                else:
-                    expected = data["prev_angle_deg"] + data["angle_change_deg"]
-
-                    if data["angle_deg"] != expected:
-                        print("Reject! Angles do not add up.")
-                        decision = Type.BAD
-                    else:
-                        print("Transfer approved.")
-
+                if abs(expected_diff - data["angle_change_deg"]) > 2:
+                    print("Reject! Angles do not match.")
+                    decision = Type.BAD
             else:
                 print("Reject! Invalid sensor event.")
                 decision = Type.BAD
@@ -343,53 +317,6 @@ def handle_validator(tcp):
             )
 
             send_others(val)
-
-    elif msg.type == Type.MOV:
-        # parse TKN, new data to validate
-        mov = msg.as_type(Type.MOV)
-        
-        # store signed data
-        session.set_data(mov.body)
-
-        # validate data
-        mov.apply(keys[wallet_id].unsign)
-        data = mov.as_json()
-        #checking for correct formatting
-        if (("node_id" not in data)
-            or ("recipient" not in data)
-            or ("timestamp" not in data)
-            or ("amount" not in data)):
-            print("Reject! Missing required field.")
-            decision = Type.BAD
-
-        else:
-            #checking the timestamp
-            start_time = datetime.fromisoformat(data["timestamp"])
-            delta = start_time - now
-
-            if ((delta < timedelta(seconds=0))
-                or (delta > timedelta(seconds=5))):
-                print("Reject! Bad timestamp.")
-
-               # Check recipient exists
-            elif data["recipient"] not in wallets:
-                print("Reject! Recipient wallet does not exist.")
-                decision = Type.BAD            
-
-            # Check amount is valid
-            elif data["amount"] <= 0:
-                print("Reject! Invalid amount.")
-                decision = Type.BAD  
-
-            else:
-                addr = keys[wallet_id].reveal()
-
-                # Check sender has enough funds
-                if wallets[addr] < data["amount"]:
-                    print("Reject! Insufficient funds.")
-                    decision = Type.BAD
-                else:
-                    print("Transfer approved.")
 
     elif msg.type == Type.VAL:
         # parse VAL, intermediate validator decision
