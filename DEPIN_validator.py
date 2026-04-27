@@ -36,7 +36,10 @@ NODE_ID = sys.argv[1]
 NODE_ADDR = Address.VALIDATORS[NODE_ID]
 
 ################################################################ POLL SOCKETS ##
-from listen import poll, send_all, update_transactions, wallets, keys, pending
+from listen import (
+    poll, send_all, update_transactions, # functions
+    transactions, wallets, keys, pending, results # shared data
+)
 
 # run on separate thread
 sockets_thread = Thread(target=poll, args=(NODE_ADDR,))
@@ -90,29 +93,15 @@ def post_transaction():
     pending.pop((wallet_id, session_id))
 
     if is_done:
-        update_transactions()
-        return jsonify(transactions[-1]), 200
+        decision = results[wallet_id, session_id]
+
+        if decision == Type.BAD:
+            return "Invalid mint!", 500
+        else:
+            update_transactions()
+            return jsonify(transactions[-1]), 200
     else:
-        return "Request timed out.", 408
-
-@app.route("/wallets")
-def get_wallets():
-    return jsonify(wallets)
-
-@app.route("/wallets/<addr>")
-def get_wallet(addr):
-    if addr in wallets:
-        return wallets[addr], 200
-    else:
-        return "Wallet not found.", 404
-
-@app.route("/transactions")
-def get_transactions():
-    return jsonify(transactions)
-
-@app.route("/validators")
-def get_validators():
-    return jsonify(validators)
+        return "Timed out!", 408
 
 @app.post("/move")
 def post_move():
@@ -139,6 +128,7 @@ def post_move():
         session_id = secrets.randbits(32)
 
     pending[wallet_id, session_id] = Event()
+
     # send EXACT payload to validators (just like mint)
     mov = concat(
         Type.MOV,
@@ -151,10 +141,34 @@ def post_move():
     pending.pop((wallet_id, session_id))
 
     if is_done:
-        update_transactions()
-        return jsonify(transactions[-1]), 200
+        decision = results.pop(wallet_id, session_id)
+        
+        if decision == Type.BAD:
+            return "Invalid move!", 500
+        else:
+            update_transactions()
+            return jsonify(transactions[-1]), 200
+    else:
+        return "Timed out!", 408
 
-    return "Move request timed out.", 408
+@app.route("/wallets")
+def get_wallets():
+    return jsonify(wallets)
+
+@app.route("/wallets/<addr>")
+def get_wallet(addr):
+    if addr in wallets:
+        return wallets[addr], 200
+    else:
+        return "Wallet not found.", 404
+
+@app.route("/transactions")
+def get_transactions():
+    return jsonify(transactions)
+
+@app.route("/validators")
+def get_validators():
+    return jsonify(validators)
 
 ############################################################### LAUNCH SERVER ##
 if __name__ == "__main__":

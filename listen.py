@@ -24,9 +24,10 @@ keys = {}
 keys["self"] = Private("keys/validator.prv.pem")
 keys["validators"] = Symmetric("keys/validator.sym")
 
-# initialize wallets
 wallets = {}
+transactions = {}
 
+# initialize wallets
 for w in Address.WALLETS:
     keys[w] = Public("keys/{}.pub.pem".format(w))
     addr = keys[w].reveal()
@@ -184,14 +185,14 @@ class Session:
 
         # mark session complete
         sessions.pop(self.session)
-        done.add(self.session)
+        results[self.session] = self.consensus
 
         if self.session in pending:
             pending[self.session].set()
 
 pending = {}
 sessions = {}
-done = set()
+results = {}
 
 # fetch an existing session or initialize a new one if it does not exist
 def get_session(*session):
@@ -265,7 +266,7 @@ def handle_validator(tcp):
     # parse session
     wallet_id, session_id = msg.get_fields(str, int)
 
-    if (wallet_id, session_id) in done:
+    if (wallet_id, session_id) in results:
         # ignore any message on previous sessions
         print("WARN! {} after end of session {}#{}!".format(
             msg.type, wallet_id, session_id)
