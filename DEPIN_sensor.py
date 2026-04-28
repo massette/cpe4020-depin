@@ -30,7 +30,7 @@ REQUEST_TIMEOUT = 5.0
 ################################################################ NODE DETAILS ##
 # parse arguments
 if len(sys.argv) < 2:
-    print("USAGE: python {} <VALIDATOR ID>".format(sys.argv[0]))
+    print("USAGE: python {} <WALLET ID>".format(sys.argv[0]))
     print()
 
     sys.exit(1)
@@ -167,7 +167,7 @@ while True:
 
         while try_count < max_tries and not sent_ok:
             try:
-                addr = Address.VALIDATORS["V01"][0] # request_validator()
+                addr = request_validator() # Address.VALIDATORS["V01"][0]
                 mint_uri = "http://{}:6561/mint".format(addr)
 
                 # FIX: use data=payload

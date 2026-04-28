@@ -46,21 +46,21 @@ def request_validator():
             udp.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             udp.sendto(req, Address.BROADCAST)
 
-            # parse ACK
-            tcp_ack, _ = tcp.accept()
+        # parse ACK
+        tcp_ack, _ = tcp.accept()
 
-            with tcp_ack:
-                ack = Message.from_socket(tcp_ack).as_type(Type.ACK)
-            
-            # check nonce
-            ack.apply(keys["self"].decrypt)
-            validator_id, r_ack = ack.get_fields(str, int)
+        with tcp_ack:
+            ack = Message.from_socket(tcp_ack).as_type(Type.ACK)
+        
+        # check nonce
+        ack.apply(keys["self"].decrypt)
+        validator_id, r_ack = ack.get_fields(str, int)
 
-            if r != r_ack:
-                raise ack.error("Bad nonce.")
+        if r != r_ack:
+            raise ack.error("Bad nonce.")
 
-            # return first address to respond
-            return ack.address
+        # return first address to respond
+        return ack.address
 
 ################################################################# TEST SCRIPT ##
 # when run as a standalone script,
