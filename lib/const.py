@@ -20,7 +20,7 @@ class Type(Enum):
 
 class Address:
     # shared validator host
-    VALIDATOR_HOST = ipaddress.ip_interface("10.100.153.11/18")
+    VALIDATOR_HOST = ipaddress.ip_interface("10.42.0.1/24")
     VALIDATOR_IP = str(VALIDATOR_HOST.ip)
 
     # derived network information

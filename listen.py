@@ -2,7 +2,6 @@ import sys
 import time
 import socket
 import select
-from datetime import datetime, timedelta, UTC
 from threading import Thread
 from flask import Flask, request
 from random import shuffle
@@ -337,10 +336,6 @@ def handle_validator(tcp):
     else:
         print("WARN! Unexpected message type {}.".format(msg.type))
 
-# time constants
-MIN_DELTA = timedelta(seconds=0)
-MAX_DELTA = timedelta(seconds=15)
-
 # run validation on mint data
 def validate_mint(data):
     # check for required fields
@@ -349,10 +344,9 @@ def validate_mint(data):
         return Type.BAD
     
     # check timestamp
-    start_time = datetime.fromisoformat(data["timestamp"])
-    delta = datetime.now(UTC) - start_time
+    now = time.time()
 
-    if (delta < MIN_DELTA) or (delta > MAX_DELTA):
+    if (data["timestamp"] > now) or (data["timestamp"] < now - 15):
         print("Reject! Bad timestamp.")
         return Type.BAD
     
@@ -367,12 +361,12 @@ def validate_mint(data):
         # check angles
         if (data["angle_deg"] < 0) or (data["angle_deg"] > 360):
             print("Reject! Bad angle.")
-            decision = Type.BAD
+            return Type.BAD
 
         delta = abs(data["angle_deg"] - data["prev_angle_deg"])
-        if delta - data["angle_change_deg"] < 0.1:
+        if delta - data["angle_change_deg"] > 0.1:
             print("Reject! Angles do not add up.")
-            decision = Type.BAD
+            return Type.BAD
         
     else:
         print("Reject! Invalid sensor event.")
@@ -390,10 +384,9 @@ def validate_move(data):
         return Type.BAD
 
     # check timestamp
-    start_time = datetime.fromisoformat(data["timestamp"])
-    delta = datetime.now(UTC) - start_time
+    now = time.time()
 
-    if (delta < MIN_DELTA) or (delta > MAX_DELTA):
+    if (data["timestamp"] > now) or (data["timestamp"] < now - 15):
         print("Reject! Bad timestamp.")
         return Type.BAD
 
