@@ -24,27 +24,13 @@ keys = {}
 keys["self"] = Private("keys/validator.prv.pem")
 keys["validators"] = Symmetric("keys/validator.sym")
 
-wallets = {}
-transactions = {}
 
-# initialize wallets
+# derive wallet addresses from keys
+wallets = set()
+
 for w in Address.WALLETS:
     keys[w] = Public("keys/{}.pub.pem".format(w))
-    addr = keys[w].reveal()
-    wallets[addr] = 0
-
-# load previous transactions
-def update_transactions():
-    global transactions
-    transactions = load_ledger()
-
-    for block in transactions:
-        if block["from"] != "MINT":
-            wallets[block["from"]] -= block["amount"]
-        
-        wallets[block["to"]] += block["amount"]
-
-update_transactions()
+    wallets.add(keys[w].reveal())
 
 ############################################################# SESSION DETAILS ##
 class Session:
@@ -113,11 +99,13 @@ class Session:
         # check timestamp
         if not self.timestamp:
             self.timestamp = timestamp
+            self.consensus_from = validator_id
         elif timestamp != self.timestamp:
             print("WARN! Multiple consensus on {}#{}!".format(*self.session))
             
             if timestamp < self.timestamp:
                 self.timestamp = timestamp
+                self.consensus_from = validator_id
 
         # check against local consensus
         if not self.consensus:
@@ -179,7 +167,7 @@ class Session:
                 self.timestamp,
                 "MINT",
                 keys[self.session[0]].reveal(),
-                NODE_ID,
+                self.consensus_from,
                 self.data
             )
 
@@ -299,11 +287,13 @@ def handle_validator(tcp):
             decision = Type.BAD
         else:
             start_time = datetime.fromisoformat(data["timestamp"])
-            delta = start_time - now
+            delta = now - start_time
 
             if ((delta < timedelta(seconds=0))
                 or (delta > timedelta(seconds=30))):
                 print("Reject! Bad timestamp.")
+                print(start_time, "@", now, "@", delta)
+                decision = Type.BAD
 
             elif data["event"] == "lock_rotation":
                 if (("angle_change_deg" not in data)
@@ -365,7 +355,7 @@ def handle_validator(tcp):
         else:
             #checking the timestamp
             start_time = datetime.fromisoformat(data["timestamp"])
-            delta = start_time - now
+            delta = now - start_time
 
             if ((delta < timedelta(seconds=0))
                 or (delta > timedelta(seconds=5))):

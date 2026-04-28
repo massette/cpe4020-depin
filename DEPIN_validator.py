@@ -10,7 +10,13 @@ from cryptography.exceptions import InvalidSignature
 from lib.const import Time, Type, Address
 from lib.bytes import concat
 
-app = Flask(__name__)
+from ledger import load_ledger, load_by_wallet
+
+app = Flask(
+    __name__,
+    template_folder="template",
+    static_folder="static"
+)
 
 # initialize validators
 validators = list(Address.VALIDATORS.keys())
@@ -37,8 +43,8 @@ NODE_ADDR = Address.VALIDATORS[NODE_ID]
 
 ################################################################ POLL SOCKETS ##
 from listen import (
-    poll, send_all, update_transactions, # functions
-    transactions, wallets, keys, pending, results # shared data
+    poll, send_all, # functions
+    wallets, keys, pending, results # shared data
 )
 
 # run on separate thread
@@ -98,8 +104,8 @@ def post_transaction():
         if decision == Type.BAD:
             return "Invalid mint!", 500
         else:
-            update_transactions()
-            return jsonify(transactions[-1]), 200
+            transaction = load_ledger()[-1]
+            return jsonify(transaction), 200
     else:
         return "Timed out!", 408
 
@@ -146,24 +152,26 @@ def post_move():
         if decision == Type.BAD:
             return "Invalid move!", 500
         else:
-            update_transactions()
-            return jsonify(transactions[-1]), 200
+            transaction = load_ledger()[-1]
+            return jsonify(transaction), 200
     else:
         return "Timed out!", 408
 
 @app.route("/wallets")
 def get_wallets():
-    return jsonify(wallets)
+    transactions = {addr: load_by_wallet(addr) for addr in wallets}
+    return jsonify(transactions)
 
 @app.route("/wallets/<addr>")
 def get_wallet(addr):
     if addr in wallets:
-        return wallets[addr], 200
+        return load_by_wallet(addr), 200
     else:
         return "Wallet not found.", 404
 
 @app.route("/transactions")
 def get_transactions():
+    transactions = load_ledger()
     return jsonify(transactions)
 
 @app.route("/validators")
@@ -172,4 +180,4 @@ def get_validators():
 
 ############################################################### LAUNCH SERVER ##
 if __name__ == "__main__":
-    app.run(host=Address.VALIDATOR_IP, port=6561)
+    app.run(host="0.0.0.0", port=6561)

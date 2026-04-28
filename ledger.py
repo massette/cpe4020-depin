@@ -13,6 +13,12 @@ def load_ledger():
     with open(LEDGER_PATH, "r") as f:
         return json.load(f)
 
+def load_by_wallet(address):
+    transactions = load_ledger()
+
+    return [block for block in transactions
+            if (block["to"] == address) or (block["from"] == address)]
+
 def save_ledger(ledger):
     with open(LEDGER_PATH, "w") as f:
         json.dump(ledger, f)
@@ -21,7 +27,7 @@ def hash_block(block):
     block_string = json.dumps(block, sort_keys=True)
     return hash(block_string)
 
-def add_block(timestamp, from_wallet, to_wallet, validator_id, data, amount=1):
+def add_block(timestamp, from_wallet, to_wallet, validator_id, data, amount=10):
     ledger = load_ledger()
 
     block = {
