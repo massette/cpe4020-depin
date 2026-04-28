@@ -13,8 +13,6 @@ import busio
 import board
 
 # CONFIG STUFF goober
-# change the URL or literally nothing works lol
-VALIDATOR_URL = "placeholder"  # set real URL
 # how many coins we get per rotation event, free money basically
 COINS_PER_EVENT = 10
 # cooldown between events so we can't just spam it and get infinite coins
@@ -23,13 +21,31 @@ MIN_EVENT_GAP = 3.0                # seconds
 # too low = false positives from just breathing near it
 ROTATION_THRESHOLD_MIN = 30        # degrees
 ROTATION_THRESHOLD_MAX = 180
-# where we save our crypto wallet key so we don't lose our money on reboot
-NODE_ID = "W01"
 # how long to wait if i2c dies before trying again
 I2C_RETRY_DELAY = 2.0
 # dont wait forever for the server to respond
 REQUEST_TIMEOUT = 5.0
 
+################################################################ NODE DETAILS ##
+# parse arguments
+if len(sys.argv) < 2:
+    print("USAGE: python {} <VALIDATOR ID>".format(sys.argv[0]))
+    print()
+
+    sys.exit(1)
+elif sys.argv[1] not in validators:
+    print(
+        "Invalid ID {}, expected one of: {}".format(
+            sys.argv[1], ", ".join(validators)
+        )
+    )
+    print()
+
+    sys.exit(1)
+
+NODE_ID = sys.argv[1]
+
+###################################################################### SENSOR ##
 # Pi 5 uses bus 1, dont change this unless you know what ur doing
 I2C_BUS = 1
 MPU6050_ADDR = 0x68  # default address for the sensor, look it up
