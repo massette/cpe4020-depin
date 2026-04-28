@@ -5,7 +5,7 @@ import requests
 import json
 from datetime import datetime, UTC
 
-from lib.const import Type, Address
+from lib.const import Time, Type, Address
 from lib.error import AppException
 from lib.keys import Private, Public
 from lib.parse import Message
@@ -27,6 +27,7 @@ def request_validator():
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
         # create TCP channel to listen for response
+        tcp.settimeout(Time.TIMEOUT)
         tcp.listen()
 
         # make REQ
