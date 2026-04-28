@@ -241,9 +241,6 @@ def handle_request(udp):
 
     # reply on dedicated TCP channel
     ack_address = req.address, port
-    print(Address.BROADCAST)
-    print("@ REQ")
-    print(ack_address)
     
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_ack:
         tcp_ack.settimeout(Time.TIMEOUT)
@@ -260,8 +257,8 @@ def handle_request(udp):
             )
 
             tcp_ack.send(ack)
-        except ConnectionRefusedError:
-            # ignore connection refused,
+        except ConnectionError:
+            # ignore connection error,
             # another validator has already responded
             return
 
@@ -473,7 +470,6 @@ def poll(address):
 
                 for s in ready:
                     if s == udp:
-                        print("UDP RECEIVED !!!")
                         handle_request(udp)
                     else:
                         handle_validator(tcp)
