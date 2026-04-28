@@ -367,7 +367,10 @@ def validate_mint(data):
             return Type.BAD
 
         delta = abs(data["angle_deg"] - data["prev_angle_deg"])
-        if delta - data["angle_change_deg"] > 0.1:
+        alt_delta = 360 - delta
+
+        if ((abs(delta - data["angle_change_deg"]) > 0.1)
+            and (abs(delta - data["angle_change_deg"]) > 0.1)):
             print("Reject! Angles do not add up.")
             return Type.BAD
         
