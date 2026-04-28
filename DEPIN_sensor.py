@@ -150,9 +150,9 @@ while True:
         payload = {
             "node_id": NODE_ID,
             "event": "lock_rotation",
-            "angle_change_deg": round(diff, 1),
-            "prev_angle_deg": round(prev_angle, 1),
-            "angle_deg": round(current_angle, 1),
+            "angle_change_deg": round(diff, 2),
+            "prev_angle_deg": round(prev_angle, 2),
+            "angle_deg": round(current_angle, 2),
             "timestamp": time.time(),
         }
 
@@ -167,7 +167,7 @@ while True:
 
         while try_count < max_tries and not sent_ok:
             try:
-                addr = request_validator()
+                addr = Address.VALIDATORS["V01"][0] # request_validator()
                 mint_uri = "http://{}:6561/mint".format(addr)
 
                 # FIX: use data=payload
