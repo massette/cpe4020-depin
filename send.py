@@ -3,15 +3,16 @@ import socket
 import secrets
 import requests
 import json
+from datetime import datetime, UTC
 
 from lib.const import Type, Address
+from lib.error import AppException
 from lib.keys import Private, Public
 from lib.parse import Message
 from lib.bytes import concat
 
 ################################################################ NODE DETAILS ##
-NODE_ID = sys.argv[1] if len(sys.argv) > 1 else "W01"
-NODE_ADDR = Address.WALLETS[NODE_ID]
+NODE_ID = sys.argv[1]
 
 ############################################################# ENCRYPTION KEYS ##
 keys = {}
@@ -21,13 +22,14 @@ keys["validator"] = Public("keys/validator.pub.pem")
 ################################################################### FUNCTIONS ##
 # get address of some validator in the network
 def request_validator():
+    # generate nonce
     r = secrets.randbits(32)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
-        tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        tcp.bind(Address.WALLETS[NODE_ID])
+        # create TCP channel to listen for response
         tcp.listen()
 
+        # make REQ
         _, port = tcp.getsockname()
 
         req = concat(
@@ -37,22 +39,26 @@ def request_validator():
             )
         )
 
+        # broadcast REQ to LAN
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
             udp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             udp.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             udp.sendto(req, Address.BROADCAST)
 
+        # parse ACK
         tcp_ack, _ = tcp.accept()
 
         with tcp_ack:
             ack = Message.from_socket(tcp_ack).as_type(Type.ACK)
-            ack.apply(keys["self"].decrypt)
-
+        
+        # check nonce
+        ack.apply(keys["self"].decrypt)
         validator_id, r_ack = ack.get_fields(str, int)
 
         if r != r_ack:
             raise ack.error("Bad nonce.")
 
+        # return first address to respond
         return ack.address
 
 ################################################################# TEST SCRIPT ##
@@ -62,17 +68,26 @@ if __name__ == "__main__":
     addr = request_validator()
     mint_uri = "http://{}:6561/mint".format(addr)
 
-    while True:
-        raw = input("> ")
+    data = json.dumps({
+        "node_id": NODE_ID,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "event": "lock_rotation",
 
-        if raw.strip() == "":
-            break
+        "angle_change_deg": 20,
+        "prev_angle_deg": 40,
+        "angle_deg": 60,
+    })
 
-        data = json.dumps({"test": raw})
-        payload = keys["self"].sign(data)
+    payload = keys["self"].sign(data)
+    requests.post(mint_uri, payload)
 
-        requests.post(
-            mint_uri,
-            data=payload,
-            headers={"Content-Type": "application/octet-stream"},
-        )
+#    while True:
+#        raw = input("> ")
+#        
+#        if raw.strip() == "":
+#            break
+#
+#        data = json.dumps({ "test": raw })
+#        payload = keys["self"].sign(data)
+#
+#        requests.post(mint_uri, payload)

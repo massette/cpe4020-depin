@@ -2,354 +2,503 @@ import sys
 import time
 import socket
 import select
+from datetime import datetime, timedelta, UTC
+from threading import Thread
+from flask import Flask, request
+from random import shuffle
 
 from lib.const import Time, Type, Address
 from lib.error import AppException
 from lib.keys import Symmetric, Public, Private
 from lib.parse import Message
 from lib.bytes import concat
+
 from ledger import add_block
 
-
 ################################################################ NODE DETAILS ##
-# Which validator this instance is
 NODE_ID = sys.argv[1]
 NODE_ADDR = Address.VALIDATORS[NODE_ID]
 
-
 ############################################################# ENCRYPTION KEYS ##
-# Load validator private key + shared validator key
 keys = {}
 keys["self"] = Private("keys/validator.prv.pem")
 keys["validators"] = Symmetric("keys/validator.sym")
 
-# Load all wallet public keys
-for wallet_id in Address.WALLETS:
-    keys[wallet_id] = Public("keys/{}.pub.pem".format(wallet_id))
+# derive wallet addresses from keys
+wallets = set()
 
+for w in Address.WALLETS:
+    keys[w] = Public("keys/{}.pub.pem".format(w))
+    wallets.add(keys[w].reveal())
 
-############################################################# SESSION STORAGE ##
-# pending = sessions waiting for HTTP response
-pending = {}
-
-# sessions = active validator consensus sessions
-sessions = {}
-
-# done = completed sessions
-done = set()
-
-
-################################################################ SESSION CLASS ##
+############################################################# SESSION DETAILS ##
 class Session:
     def __init__(self, *session):
-        self.session = session  # (wallet_id, session_id)
+        self.session = session # (wallet_id, session_id)
         self.data = None
 
-        # Track validator votes
+        # votes towards a local consensus
         self.val_received = set()
         self.counts = {
             Type.TKN: 0,
             Type.BAD: 0,
         }
 
-        # Track consensus confirmations
+        # aggregate network consensus across network
         self.don_received = set()
         self.consensus = None
         self.timestamp = None
 
-    ############################################################ SET DATA ##
     def set_data(self, data):
+        # check if data has already been set
         if self.data:
             print("WARN! Data already set on {}#{}!".format(*self.session))
             return
-
+        
+        # update data
         self.data = data
 
-        # If consensus already reached, finalize
+        # when all validators have agreed, end session
         if len(self.don_received) == len(Address.VALIDATORS):
             self.resolve()
 
-    ######################################################## ADD DECISION ##
     def add_decision(self, validator_id, decision):
-        # Prevent duplicate votes
+        # check if validator has already responded
         if validator_id in self.val_received:
-            print("WARN! Repeated validator on {}#{} (VAL)!".format(*self.session))
+            print("WARN! Repeated validator on {}#{} (VAL)!".format(
+                *self.session)
+            )
+
             return
 
+        # update counts
         self.counts[decision] += 1
         self.val_received.add(validator_id)
 
-        # Check for majority vote
+        # check for majority
         if not self.consensus:
             for result in self.counts:
                 if self.counts[result] > len(Address.VALIDATORS) / 2:
-                    print("Local consensus on {}#{}.".format(*self.session))
-                    self.add_consensus(NODE_ID, result, time.time())
+                    print("Local consensus on {}#{}.".format(
+                        *self.session
+                    ))
 
-    ######################################################## ADD CONSENSUS ##
+                    timestamp = time.time()
+                    self.add_consensus(NODE_ID, result, timestamp)
+    
     def add_consensus(self, validator_id, decision, timestamp):
+        # check if validator has already responded
         if validator_id in self.don_received:
-            print("WARN! Repeated validator on {}#{} (DON)!".format(*self.session))
+            print("WARN! Repeated validator on {}#{} (DON)!".format(
+                *self.session)
+            )
             return
-
-        # Keep earliest timestamp
+        
+        # keep earliest timestamp
         if not self.timestamp:
             self.timestamp = timestamp
-        elif timestamp < self.timestamp:
-            self.timestamp = timestamp
+            self.consensus_from = validator_id
+        elif timestamp != self.timestamp:
+            print("WARN! Multiple consensus on {}#{}!".format(*self.session))
+            
+            if timestamp < self.timestamp:
+                self.timestamp = timestamp
+                self.consensus_from = validator_id
 
-        # First consensus reached
+        # check against local consensus
         if not self.consensus:
+            if validator_id != NODE_ID:
+                print("Remote consensus ({}) on {}#{}.".format(
+                    validator_id, *self.session
+                ))
+                print("Consensus 1 ({}) on {}#{}.".format(
+                    NODE_ID, *self.session
+                ))
+
+            # update local consensus if none exists
             self.consensus = decision
             self.don_received.add(NODE_ID)
 
-            # Broadcast DON (final consensus message)
+            # send DON to connected validators
             don = concat(
                 Type.DON,
                 keys["validators"].encrypt(
-                    *self.session,
-                    NODE_ID,
-                    self.consensus,
-                    self.timestamp,
-                ),
+                    *self.session, NODE_ID, self.consensus, self.timestamp
+                )
             )
-
+            
             send_others(don)
-
         elif decision != self.consensus:
             self.reject()
             raise AppException("Split consensus on {}#{}!".format(*self.session))
 
+        # update consensus list
         self.don_received.add(validator_id)
+        print("Consensus {} ({}) on {}#{}.".format(
+            len(self.don_received), validator_id, *self.session
+        ))
 
-        print(
-            "Consensus {} ({}) on {}#{}.".format(
-                len(self.don_received),
-                validator_id,
-                *self.session,
-            )
-        )
-
-        # If all validators agreed, finalize
-        if self.data and len(self.don_received) == len(Address.VALIDATORS):
+        # if all validator have agreed, end session
+        if self.data and (len(self.don_received) == len(Address.VALIDATORS)):
             self.resolve()
 
-    ############################################################ REJECT ##
     def reject(self):
         self.consensus = Type.BAD
         self.resolve()
 
-    ############################################################ RESOLVE ##
     def resolve(self):
         print()
-        print("=======================================")
-        print("CONSENSUS:", self.consensus.name)
-        print("TIME:", self.timestamp)
-        print("SESSION:", self.session)
-        print("=======================================")
-        print(self.data)
-        print("=======================================")
-        print()
 
-        # If accepted → add block to ledger
+        # if accepted, add block to ledger
         if self.consensus == Type.TKN:
             add_block(
                 self.timestamp,
                 "MINT",
                 keys[self.session[0]].reveal(),
-                NODE_ID,
-                self.data,
-                amount=10,
+                self.consensus_from,
+                self.data
             )
 
-        # Clean up session
-        sessions.pop(self.session, None)
-        done.add(self.session)
+            print("======================================== TKN ! ==")
+            print("TIME=", self.timestamp)
+            print("FROM=", b"MINT")
+            print("TO  =", keys[self.session[0]].reveal())
+            print("-------------------------------------------------")
+            print(self.data)
+            print("=================================================")
+            print()
+        elif self.consensus == Type.MOV:
+            # add_block
 
-        # Notify HTTP thread
+            print()
+            print("======================================== MOV ! ==")
+            print("TIME=", self.timestamp)
+            print("FROM=", b"MINT")
+            print("TO  =", keys[self.session[0]].reveal())
+            print("-------------------------------------------------")
+            print(self.data)
+            print("=================================================")
+            print()
+        else:
+            print()
+            print("======================================== {} ! ==".format(
+                self.consensus.name
+            ))
+            print("TIME=", self.timestamp)
+            print("-------------------------------------------------")
+            print(self.data)
+            print("=================================================")
+            print()
+
+        # mark session complete
+        sessions.pop(self.session)
+        results[self.session] = self.consensus
+
+        # notify HTTP thread
         if self.session in pending:
             pending[self.session].set()
 
+# on-going validator sessions seeking network consensus
+sessions = {}
 
-############################################################ SESSION HELPERS ##
+# sessions which have been resovled to a single decision
+results = {}
+
+# http responses by session awaiting action
+pending = {}
+
+# fetch an existing session or initialize a new one if it does not exist
 def get_session(*session):
     if session not in sessions:
         sessions[session] = Session(*session)
+
     return sessions[session]
 
-
-############################################################ HANDLE REQUEST ##
+################################################################### FUNCTIONS ##
+# handle anonymous validation request
 def handle_request(udp):
+    # parse REQ
     req = Message.from_socket(udp).as_type(Type.REQ)
-
+    
+    # check signature against each wallet key
     wallet_id = None
 
-    # Identify wallet by signature
     for w in Address.WALLETS:
         try:
             req.apply(keys[w].unsign)
             wallet_id = w
             break
-        except Exception:
+        except:
+            # wrong key, try again
             continue
 
-    if wallet_id is None:
+    # fail if no key matched
+    if wallet_id == None:
         return
 
-    # Decrypt request
+    # finish parse REQ
     req.apply(keys["self"].decrypt)
     r, port = req.get_fields(int, int)
 
+    # reply on dedicated TCP channel
     ack_address = req.address, port
-
-    # Send ACK back
+    
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_ack:
         tcp_ack.settimeout(Time.TIMEOUT)
         tcp_ack.bind((NODE_ADDR[0], 0))
 
         try:
+            # attempt connect
             tcp_ack.connect(ack_address)
-
+            
+            # send ACK
             ack = concat(
-                Type.ACK,
-                keys[wallet_id].encrypt(NODE_ID, r),
+                Type.ACK, 
+                keys[wallet_id].encrypt(NODE_ID, r)
             )
 
             tcp_ack.send(ack)
-
-        except Exception:
+        except ConnectionRefusedError:
+            # ignore connection refused,
+            # another validator has already responded
             return
 
-
-############################################################ HANDLE VALIDATOR ##
+# handle message from validator
 def handle_validator(tcp):
-    tcp_val, _ = tcp.accept()
+    # record time at start of transaction
+    now = datetime.now(UTC)
 
+    # establish connection
+    (tcp_val, _) = tcp.accept()
+
+    # receive message, unknown type
     with tcp_val:
         msg = Message.from_socket(tcp_val)
-        msg.apply(keys["validators"].decrypt)
-
+        
+    # parse session information
+    msg.apply(keys["validators"].decrypt)
     wallet_id, session_id = msg.get_fields(str, int)
 
-    if (wallet_id, session_id) in done:
+    if (wallet_id, session_id) in results:
+        # ignore any message on previous sessions
+        print("WARN! {} after end of session {}#{}!".format(
+            msg.type, wallet_id, session_id)
+        )
+
         return
 
     session = get_session(wallet_id, session_id)
 
-    ######################################################## HANDLE TKN ##
+    # parse message
     if msg.type == Type.TKN:
+        # parse TKN, new data to validate
         tkn = msg.as_type(Type.TKN)
-        session.set_data(tkn.body)
-
+        
+        # validate data
         tkn.apply(keys[wallet_id].unsign)
+
+        session.set_data(tkn.body.decode())
         data = tkn.as_json()
 
+        # default accept mint
         decision = Type.TKN
 
-        now = time.time()
-        delta = data["timestamp"] - now
-
-        # Validate timestamp
-        if delta < -30 or delta > 30:
-            print("Reject! Bad timestamp.")
+        # check for invalid data
+        if (("node_id" not in data)
+            or ("event" not in data)
+            or ("timestamp" not in data)):
+            print("Reject! Missing required field.")
             decision = Type.BAD
-
-        # Validate rotation math
         else:
-            expected_diff = abs(
-                (data["angle_deg"] - data["prev_angle_deg"] + 180) % 360 - 180
-            )
+            start_time = datetime.fromisoformat(data["timestamp"])
+            delta = now - start_time
 
-            if abs(expected_diff - data["angle_change_deg"]) > 2:
-                print("Reject! Angles do not match.")
+            if ((delta < timedelta(seconds=0))
+                or (delta > timedelta(seconds=30))):
+                print("Reject! Bad timestamp.")
+                print(start_time, "@", now, "@", delta)
                 decision = Type.BAD
 
+            elif data["event"] == "lock_rotation":
+                if (("angle_change_deg" not in data)
+                    or ("prev_angle_deg" not in data)
+                    or ("angle_deg" not in data)):
+                    print("Reject! Missing event-specific field.")
+                    decision = Type.BAD
+
+                elif ((data["angle_deg"] < 0)
+                      or (data["angle_deg"] > 360)):
+                    print("Reject! Bad angle.")
+                    decision = Type.BAD
+
+                else:
+                    expected = data["prev_angle_deg"] + data["angle_change_deg"]
+
+                    if data["angle_deg"] != expected:
+                        print("Reject! Angles do not add up.")
+                        decision = Type.BAD
+                    else:
+                        print("Mint approved.")
+
+            else:
+                print("Reject! Invalid sensor event.")
+                decision = Type.BAD
+
+        # update session
         session.add_decision(NODE_ID, decision)
 
-        # Send vote to other validators
+        # if no consensus, send VAL to connected validators
         if not session.consensus:
             val = concat(
                 Type.VAL,
                 keys["validators"].encrypt(
-                    wallet_id,
-                    session_id,
-                    NODE_ID,
-                    decision,
-                ),
+                    wallet_id, session_id, NODE_ID, decision
+                )
             )
+
             send_others(val)
 
-    ######################################################## HANDLE VAL ##
+    elif msg.type == Type.MOV:
+        # parse TKN, new data to validate
+        mov = msg.as_type(Type.MOV)
+        
+        # store signed data
+        session.set_data(mov.body)
+
+        # validate data
+        mov.apply(keys[wallet_id].unsign)
+        data = mov.as_json()
+        #checking for correct formatting
+        if (("node_id" not in data)
+            or ("recipient" not in data)
+            or ("timestamp" not in data)
+            or ("amount" not in data)):
+            print("Reject! Missing required field.")
+            decision = Type.BAD
+
+        else:
+            #checking the timestamp
+            start_time = datetime.fromisoformat(data["timestamp"])
+            delta = now - start_time
+
+            if ((delta < timedelta(seconds=0))
+                or (delta > timedelta(seconds=5))):
+                print("Reject! Bad timestamp.")
+
+               # Check recipient exists
+            elif data["recipient"] not in wallets:
+                print("Reject! Recipient wallet does not exist.")
+                decision = Type.BAD            
+
+            # Check amount is valid
+            elif data["amount"] <= 0:
+                print("Reject! Invalid amount.")
+                decision = Type.BAD  
+
+            else:
+                addr = keys[wallet_id].reveal()
+
+                # Check sender has enough funds
+                if wallets[addr] < data["amount"]:
+                    print("Reject! Insufficient funds.")
+                    decision = Type.BAD
+                else:
+                    print("Transfer approved.")
+
     elif msg.type == Type.VAL:
+        # parse VAL, intermediate validator decision
         val = msg.as_type(Type.VAL)
         validator_id, decision = val.get_fields(str, Type)
+
         session.add_decision(validator_id, decision)
 
-    ######################################################## HANDLE DON ##
     elif msg.type == Type.DON:
+        # parse DON, final validator decision
         don = msg.as_type(Type.DON)
         validator_id, decision, timestamp = don.get_fields(str, Type, float)
+
         session.add_consensus(validator_id, decision, timestamp)
 
+        # warn! race condition
+        # if minting multiple tokens at once across the network,
+        #   different validators may resolve them in a different order
+        #   resulting in different copies of the ledger, compromising the chain
 
-############################################################ NETWORK SEND ##
+    else:
+        print("WARN! Unexpected message type {}.".format(msg.type))
+
+# send a message to all connected validators
 def send_all(msg):
+    # validators = list(Address.VALIDATORS.keys())
+    # shuffle(validators)
+
     for v in Address.VALIDATORS:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_v:
                 tcp_v.connect(Address.VALIDATORS[v])
                 tcp_v.send(msg)
-        except Exception:
-            pass
+        except ConnectionRefusedError:
+            print("Connection rejected on node {}!".format(v))
 
+        # time.sleep(0.2)
 
+# send a message to all connected validators (except this one)
 def send_others(msg):
     for v in Address.VALIDATORS:
         if v == NODE_ID:
             continue
+
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_v:
                 tcp_v.connect(Address.VALIDATORS[v])
                 tcp_v.send(msg)
-        except Exception:
-            pass
+        except ConnectionRefusedError:
+            print("Connection rejected on node {}!".format(v))
 
-
-############################################################ MAIN POLL LOOP ##
+# poll sockets
 def poll(address):
-    # UDP socket (sensor discovery)
+    # udp socket for initial anonymous validation requests
     udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    udp.settimeout(Time.TIMEOUT)
 
     try:
         udp.bind(Address.BROADCAST)
     except OSError:
-        # Windows fix
+        # windows fix ?
         udp.bind(("0.0.0.0", Address.BROADCAST[1]))
 
-    # TCP socket (validator communication)
+    # tcp socket for communications with other validators
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    tcp.settimeout(Time.TIMEOUT)
     tcp.bind(address)
     tcp.listen()
 
-    sockets = [udp, tcp]
+    # list of all sockets
+    sockets = [ udp, tcp ]
 
-    while True:
-        try:
-            ready, _, _ = select.select(sockets, [], [], 0)
+    try:
+        # poll sockets until interrupted
+        while True:
+            try:
+                (ready, _, _) = select.select(sockets, [], [], 0)
 
-            for s in ready:
-                if s == udp:
-                    handle_request(udp)
-                else:
-                    handle_validator(tcp)
+                for s in ready:
+                    if s == udp:
+                        handle_request(udp)
+                    else:
+                        handle_validator(tcp)
 
-            time.sleep(Time.POLL)
+                time.sleep(Time.POLL)
+            except AppException as e:
+                print(e)
+    finally:
+        udp.close()
+        tcp.close()
 
-        except AppException as e:
-            print(e)
-
-
+################################################################# TEST SCRIPT ##
+# when run as a standalone script,
+# poll for any TCP validator messages
 if __name__ == "__main__":
     poll(NODE_ADDR)

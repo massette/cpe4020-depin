@@ -1,7 +1,7 @@
 import json
 import requests
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 import math
 import sys
 import time
@@ -135,7 +135,7 @@ while True:
             "angle_change_deg": round(diff, 1),
             "prev_angle_deg": round(prev_angle, 1),
             "angle_deg": round(current_angle, 1),
-            "timestamp": time.time(),
+            "timestamp": datetime.now(UTC),
         }
 
         # sign the payload so the server knows it's legit and not spoofed
