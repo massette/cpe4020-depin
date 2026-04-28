@@ -44,6 +44,7 @@ def request_validator():
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
             udp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             udp.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            print("SEND REQ")
             udp.sendto(req, Address.BROADCAST)
 
         # parse ACK

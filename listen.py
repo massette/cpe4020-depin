@@ -241,6 +241,9 @@ def handle_request(udp):
 
     # reply on dedicated TCP channel
     ack_address = req.address, port
+    print(Address.BROADCAST)
+    print("@ REQ")
+    print(ack_address)
     
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_ack:
         tcp_ack.settimeout(Time.TIMEOUT)
@@ -446,6 +449,7 @@ def poll(address):
         udp.bind(Address.BROADCAST)
     except OSError:
         # windows fix ?
+        print("Failed to bind broadcast, listening on all interfaces.")
         udp.bind(("0.0.0.0", Address.BROADCAST[1]))
 
     # tcp socket for communications with other validators
@@ -466,6 +470,7 @@ def poll(address):
 
                 for s in ready:
                     if s == udp:
+                        print("UDP RECEIVED !!!")
                         handle_request(udp)
                     else:
                         handle_validator(tcp)
