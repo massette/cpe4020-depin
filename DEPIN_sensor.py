@@ -135,7 +135,7 @@ while True:
             "angle_change_deg": round(diff, 1),
             "prev_angle_deg": round(prev_angle, 1),
             "angle_deg": round(current_angle, 1),
-            "timestamp": datetime.now(UTC),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # sign the payload so the server knows it's legit and not spoofed
