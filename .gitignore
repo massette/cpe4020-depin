@@ -2,4 +2,4 @@
 !.gitignore
 __pycache__ 
 
-ledger.*.json
+ledger*.json

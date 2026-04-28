@@ -10,8 +10,6 @@ from cryptography.exceptions import InvalidSignature
 from lib.const import Time, Type, Address
 from lib.bytes import concat
 
-from ledger import load_ledger, load_by_wallet
-
 app = Flask(
     __name__,
     template_folder="template",
@@ -46,6 +44,8 @@ from listen import (
     poll, send_all, # functions
     wallets, keys, pending, results # shared data
 )
+
+from ledger import load_ledger, load_by_wallet
 
 # run on separate thread
 sockets_thread = Thread(target=poll, args=(NODE_ADDR,))
@@ -179,5 +179,7 @@ def get_validators():
     return jsonify(validators)
 
 ############################################################### LAUNCH SERVER ##
+# for multiple validators at the same address,
+# only the first will host the http server
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=6561)

@@ -37,7 +37,7 @@ def add_block(timestamp, from_wallet, to_wallet, validator_id, data, amount=10):
         "to": to_wallet,
         "validator": validator_id,
         "amount": amount,
-        "data": hash(data).hex(),
+        "data": data, # hash(data).hex(),
 
         "previous_hash": (
             (hash_block(ledger[-1]) if ledger else hash("GENESIS")).hex()

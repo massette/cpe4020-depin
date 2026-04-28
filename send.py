@@ -27,11 +27,10 @@ def request_validator():
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
         # create TCP channel to listen for response
-        tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         tcp.listen()
 
         # make REQ
-        (_, port) = tcp.getsockname()
+        _, port = tcp.getsockname()
 
         req = concat(
             Type.REQ,
@@ -47,17 +46,19 @@ def request_validator():
             udp.sendto(req, Address.BROADCAST)
 
         # parse ACK
-        (tcp_ack, _) = tcp.accept()
-        ack = Message.from_socket(tcp_ack).as_type(Type.ACK)
-        ack.apply(keys["self"].decrypt)
+        tcp_ack, _ = tcp.accept()
 
+        with tcp_ack:
+            ack = Message.from_socket(tcp_ack).as_type(Type.ACK)
+        
         # check nonce
+        ack.apply(keys["self"].decrypt)
         validator_id, r_ack = ack.get_fields(str, int)
 
         if r != r_ack:
             raise ack.error("Bad nonce.")
 
-        # return responding address
+        # return first address to respond
         return ack.address
 
 ################################################################# TEST SCRIPT ##

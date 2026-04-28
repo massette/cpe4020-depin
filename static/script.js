@@ -5,13 +5,8 @@ async function fetchData() {
         ([address, blocks]) => [address, blocks.reduce(
             (sum, block) => (block["to"] == address)
             ? sum + block["amount"] : sum - block["amount"], 0)]);
-    console.log(balances);
 
-    // limit transaction history to last 20 transactions
-    const transactions = (await fetch('/transactions').then(res => res.json()))
-        .splice(-20);
-
-    // request active validators
+    const transactions = await fetch('/transactions').then(res => res.json());
     const validators = await fetch('/validators').then(res => res.json());
 
     // Wallets
@@ -20,9 +15,9 @@ async function fetchData() {
             `<li>${address} : ${balance} coins</li>`
         ).join("");
 
-    // Transactions (with timestamp + +/-)
+    // Last 20 transactions (with timestamp + +/-)
     document.getElementById("transactions").innerHTML =
-        transactions.map(t => `
+        transactions.slice(-20).map(t => `
             <li>
                 ${t.validator} |
                 ${new Date(t.timestamp * 1000).toLocaleTimeString()} |

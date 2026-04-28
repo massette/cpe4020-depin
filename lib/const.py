@@ -31,11 +31,9 @@ class Address:
     # Port 6561 reserved for REST API *on all validators*
 
     VALIDATORS = {
-        "V01": ("10.167.29.157", 6562),
-        "V02": ("10.167.29.34", 6562),
-#        "V01": (VALIDATOR_IP, 6562),
-#        "V02": (VALIDATOR_IP, 6563),
-#        "V03": (VALIDATOR_IP, 6564),
+        "V01": (VALIDATOR_IP, 6562),
+        "V02": (VALIDATOR_IP, 6563),
+        "V03": (VALIDATOR_IP, 6564),
     }
 
     WALLETS = ( "W01", "W02" )

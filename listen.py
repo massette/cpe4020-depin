@@ -13,7 +13,7 @@ from lib.keys import Symmetric, Public, Private
 from lib.parse import Message
 from lib.bytes import concat
 
-from ledger import load_ledger, add_block
+from ledger import add_block
 
 ################################################################ NODE DETAILS ##
 NODE_ID = sys.argv[1]
@@ -23,7 +23,6 @@ NODE_ADDR = Address.VALIDATORS[NODE_ID]
 keys = {}
 keys["self"] = Private("keys/validator.prv.pem")
 keys["validators"] = Symmetric("keys/validator.sym")
-
 
 # derive wallet addresses from keys
 wallets = set()
@@ -35,18 +34,17 @@ for w in Address.WALLETS:
 ############################################################# SESSION DETAILS ##
 class Session:
     def __init__(self, *session):
-        self.session = session
-
-        # local decision
+        self.session = session # (wallet_id, session_id)
         self.data = None
 
+        # votes towards a local consensus
         self.val_received = set()
         self.counts = {
             Type.TKN: 0,
             Type.BAD: 0,
         }
 
-        # remote decisions
+        # aggregate network consensus across network
         self.don_received = set()
         self.consensus = None
         self.timestamp = None
@@ -60,7 +58,7 @@ class Session:
         # update data
         self.data = data
 
-        # check for final consensus
+        # when all validators have agreed, end session
         if len(self.don_received) == len(Address.VALIDATORS):
             self.resolve()
 
@@ -96,7 +94,7 @@ class Session:
             )
             return
         
-        # check timestamp
+        # keep earliest timestamp
         if not self.timestamp:
             self.timestamp = timestamp
             self.consensus_from = validator_id
@@ -140,7 +138,7 @@ class Session:
             len(self.don_received), validator_id, *self.session
         ))
 
-        # check for final consensus
+        # if all validator have agreed, end session
         if self.data and (len(self.don_received) == len(Address.VALIDATORS)):
             self.resolve()
 
@@ -150,18 +148,8 @@ class Session:
 
     def resolve(self):
         print()
-        print("======================================= {} ! ==".format(
-            self.consensus.name
-        ))
-        print("TIME=", self.timestamp)
-        print("SELL=", b"MINT")
-        print("BUY =", keys[self.session[0]].reveal())
-        print("-------------------------------------------------")
-        print(self.data)
-        print("=================================================")
-        print()
 
-        # mint token
+        # if accepted, add block to ledger
         if self.consensus == Type.TKN:
             add_block(
                 self.timestamp,
@@ -171,16 +159,53 @@ class Session:
                 self.data
             )
 
+            print("======================================== TKN ! ==")
+            print("TIME=", self.timestamp)
+            print("FROM=", b"MINT")
+            print("TO  =", keys[self.session[0]].reveal())
+            print("-------------------------------------------------")
+            print(self.data)
+            print("=================================================")
+            print()
+        elif self.consensus == Type.MOV:
+            # add_block
+
+            print()
+            print("======================================== MOV ! ==")
+            print("TIME=", self.timestamp)
+            print("FROM=", b"MINT")
+            print("TO  =", keys[self.session[0]].reveal())
+            print("-------------------------------------------------")
+            print(self.data)
+            print("=================================================")
+            print()
+        else:
+            print()
+            print("======================================== {} ! ==".format(
+                self.consensus.name
+            ))
+            print("TIME=", self.timestamp)
+            print("-------------------------------------------------")
+            print(self.data)
+            print("=================================================")
+            print()
+
         # mark session complete
         sessions.pop(self.session)
         results[self.session] = self.consensus
 
+        # notify HTTP thread
         if self.session in pending:
             pending[self.session].set()
 
-pending = {}
+# on-going validator sessions seeking network consensus
 sessions = {}
+
+# sessions which have been resovled to a single decision
 results = {}
+
+# http responses by session awaiting action
+pending = {}
 
 # fetch an existing session or initialize a new one if it does not exist
 def get_session(*session):
@@ -246,12 +271,12 @@ def handle_validator(tcp):
     # establish connection
     (tcp_val, _) = tcp.accept()
 
+    # receive message, unknown type
     with tcp_val:
-        # receive message
         msg = Message.from_socket(tcp_val)
-        msg.apply(keys["validators"].decrypt)
         
-    # parse session
+    # parse session information
+    msg.apply(keys["validators"].decrypt)
     wallet_id, session_id = msg.get_fields(str, int)
 
     if (wallet_id, session_id) in results:
@@ -269,11 +294,10 @@ def handle_validator(tcp):
         # parse TKN, new data to validate
         tkn = msg.as_type(Type.TKN)
         
-        # store signed data
-        session.set_data(tkn.body)
-
         # validate data
         tkn.apply(keys[wallet_id].unsign)
+
+        session.set_data(tkn.body.decode())
         data = tkn.as_json()
 
         # default accept mint
@@ -314,7 +338,7 @@ def handle_validator(tcp):
                         print("Reject! Angles do not add up.")
                         decision = Type.BAD
                     else:
-                        print("Transfer approved.")
+                        print("Mint approved.")
 
             else:
                 print("Reject! Invalid sensor event.")
@@ -400,6 +424,9 @@ def handle_validator(tcp):
         #   different validators may resolve them in a different order
         #   resulting in different copies of the ledger, compromising the chain
 
+    else:
+        print("WARN! Unexpected message type {}.".format(msg.type))
+
 # send a message to all connected validators
 def send_all(msg):
     # validators = list(Address.VALIDATORS.keys())
@@ -434,7 +461,12 @@ def poll(address):
     udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     udp.settimeout(Time.TIMEOUT)
-    udp.bind(Address.BROADCAST)
+
+    try:
+        udp.bind(Address.BROADCAST)
+    except OSError:
+        # windows fix ?
+        udp.bind(("0.0.0.0", Address.BROADCAST[1]))
 
     # tcp socket for communications with other validators
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -447,7 +479,7 @@ def poll(address):
     sockets = [ udp, tcp ]
 
     try:
-        # poll loop until
+        # poll sockets until interrupted
         while True:
             try:
                 (ready, _, _) = select.select(sockets, [], [], 0)
