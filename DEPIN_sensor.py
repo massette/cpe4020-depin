@@ -4,13 +4,14 @@ import os
 import math
 import sys
 import time
-from send import request_validator
 
 # Pi 5 uses smbus2 directly instead of board like vro really...
 import smbus2
 import adafruit_mpu6050
 import busio
 import board
+
+from lib.const import Address
 
 # CONFIG STUFF goober
 # how many coins we get per rotation event, free money basically
@@ -33,7 +34,7 @@ if len(sys.argv) < 2:
     print()
 
     sys.exit(1)
-elif sys.argv[1] not in validators:
+elif sys.argv[1] not in Address.WALLETS:
     print(
         "Invalid ID {}, expected one of: {}".format(
             sys.argv[1], ", ".join(validators)
@@ -44,6 +45,8 @@ elif sys.argv[1] not in validators:
     sys.exit(1)
 
 NODE_ID = sys.argv[1]
+
+from send import request_validator
 
 ###################################################################### SENSOR ##
 # Pi 5 uses bus 1, dont change this unless you know what ur doing
