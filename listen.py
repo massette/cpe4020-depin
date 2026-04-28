@@ -265,8 +265,6 @@ def handle_request(udp):
 
 # handle message from validator
 def handle_validator(tcp):
-    # record time at start of transaction
-    now = datetime.now(UTC)
 
     # establish connection
     (tcp_val, _) = tcp.accept()
@@ -290,59 +288,18 @@ def handle_validator(tcp):
     session = get_session(wallet_id, session_id)
 
     # parse message
-    if msg.type == Type.TKN:
-        # parse TKN, new data to validate
-        tkn = msg.as_type(Type.TKN)
-        
+    if (msg.type == Type.TKN) or (msg.type == Type.MOV):
         # validate data
-        tkn.apply(keys[wallet_id].unsign)
+        msg.apply(keys[wallet_id].unsign)
 
-        session.set_data(tkn.body.decode())
-        data = tkn.as_json()
+        session.set_data(msg.body.decode())
+        data = msg.as_json()
 
-        # default accept mint
-        decision = Type.TKN
-
-        # check for invalid data
-        if (("node_id" not in data)
-            or ("event" not in data)
-            or ("timestamp" not in data)):
-            print("Reject! Missing required field.")
-            decision = Type.BAD
+        # choose validation logic based on action
+        if msg.type == Type.TKN:
+            decision = validate_mint(data)
         else:
-            start_time = datetime.fromisoformat(data["timestamp"])
-            delta = now - start_time
-
-            if ((delta < timedelta(seconds=0))
-                or (delta > timedelta(seconds=30))):
-                print("Reject! Bad timestamp.")
-                print(start_time, "@", now, "@", delta)
-                decision = Type.BAD
-
-            elif data["event"] == "lock_rotation":
-                if (("angle_change_deg" not in data)
-                    or ("prev_angle_deg" not in data)
-                    or ("angle_deg" not in data)):
-                    print("Reject! Missing event-specific field.")
-                    decision = Type.BAD
-
-                elif ((data["angle_deg"] < 0)
-                      or (data["angle_deg"] > 360)):
-                    print("Reject! Bad angle.")
-                    decision = Type.BAD
-
-                else:
-                    expected = data["prev_angle_deg"] + data["angle_change_deg"]
-
-                    if data["angle_deg"] != expected:
-                        print("Reject! Angles do not add up.")
-                        decision = Type.BAD
-                    else:
-                        print("Mint approved.")
-
-            else:
-                print("Reject! Invalid sensor event.")
-                decision = Type.BAD
+            decision = validate_move(data)
 
         # update session
         session.add_decision(NODE_ID, decision)
@@ -357,53 +314,6 @@ def handle_validator(tcp):
             )
 
             send_others(val)
-
-    elif msg.type == Type.MOV:
-        # parse TKN, new data to validate
-        mov = msg.as_type(Type.MOV)
-        
-        # store signed data
-        session.set_data(mov.body)
-
-        # validate data
-        mov.apply(keys[wallet_id].unsign)
-        data = mov.as_json()
-        #checking for correct formatting
-        if (("node_id" not in data)
-            or ("recipient" not in data)
-            or ("timestamp" not in data)
-            or ("amount" not in data)):
-            print("Reject! Missing required field.")
-            decision = Type.BAD
-
-        else:
-            #checking the timestamp
-            start_time = datetime.fromisoformat(data["timestamp"])
-            delta = now - start_time
-
-            if ((delta < timedelta(seconds=0))
-                or (delta > timedelta(seconds=5))):
-                print("Reject! Bad timestamp.")
-
-               # Check recipient exists
-            elif data["recipient"] not in wallets:
-                print("Reject! Recipient wallet does not exist.")
-                decision = Type.BAD            
-
-            # Check amount is valid
-            elif data["amount"] <= 0:
-                print("Reject! Invalid amount.")
-                decision = Type.BAD  
-
-            else:
-                addr = keys[wallet_id].reveal()
-
-                # Check sender has enough funds
-                if wallets[addr] < data["amount"]:
-                    print("Reject! Insufficient funds.")
-                    decision = Type.BAD
-                else:
-                    print("Transfer approved.")
 
     elif msg.type == Type.VAL:
         # parse VAL, intermediate validator decision
@@ -427,6 +337,83 @@ def handle_validator(tcp):
     else:
         print("WARN! Unexpected message type {}.".format(msg.type))
 
+# time constants
+MIN_DELTA = timedelta(seconds=0)
+MAX_DELTA = timedelta(seconds=15)
+
+# run validation on mint data
+def validate_mint(data):
+    # check for required fields
+    if any(key not in data for key in ("node_id", "timestamp", "event")):
+        print("Reject! Missing required field.")
+        return Type.BAD
+    
+    # check timestamp
+    start_time = datetime.fromisoformat(data["timestamp"])
+    delta = datetime.now(UTC) - start_time
+
+    if (delta < MIN_DELTA) or (delta > MAX_DELTA):
+        print("Reject! Bad timestamp.")
+        return Type.BAD
+    
+    # check event
+    if data["event"] == "lock_rotation":
+        # check for more required fields
+        if any(key not in data for key in ("angle_change_deg", "prev_angle_deg",
+                                           "angle_deg")):
+            print("Reject! Missing event-specific field.")
+            return Type.BAD
+
+        # check angles
+        if (data["angle_deg"] < 0) or (data["angle_deg"] > 360):
+            print("Reject! Bad angle.")
+            decision = Type.BAD
+
+        delta = abs(data["angle_deg"] - data["prev_angle_deg"])
+        if delta - data["angle_change_deg"] < 0.1:
+            print("Reject! Angles do not add up.")
+            decision = Type.BAD
+        
+    else:
+        print("Reject! Invalid sensor event.")
+        return Type.BAD
+    
+    # otherwise, accept mint
+    return Type.TKN
+
+# run validation on transfer data
+def validate_move(data):
+    # check for required fields
+    if any(key not in data for key in ("node_id", "timestamp",
+                                       "recipient", "amount")):
+        print("Reject! Missing required field.")
+        return Type.BAD
+
+    # check timestamp
+    start_time = datetime.fromisoformat(data["timestamp"])
+    delta = datetime.now(UTC) - start_time
+
+    if (delta < MIN_DELTA) or (delta > MAX_DELTA):
+        print("Reject! Bad timestamp.")
+        return Type.BAD
+
+    # check for recipient
+    if data["recipient"] not in wallets:
+        print("Reject! Recipient wallet does not exist.")
+        return Type.BAD
+
+    # check amount
+    if data["amount"] <= 0:
+        print("Reject! Invalid amount.")
+        return Type.BAD
+    
+    if wallets[data["recipient"]] < data["amount"]:
+        print("Reject! Insufficient funds.")
+        return Type.BAD
+    
+    # otherwise, accept move
+    return Type.MOV
+    
 # send a message to all connected validators
 def send_all(msg):
     # validators = list(Address.VALIDATORS.keys())
