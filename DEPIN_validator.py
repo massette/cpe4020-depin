@@ -102,7 +102,7 @@ def post_transaction():
         decision = results[wallet_id, session_id]
 
         if decision == Type.BAD:
-            return "Invalid mint!", 500
+            return "Invalid mint!", 400
         else:
             transaction = load_ledger()[-1]
             return jsonify(transaction), 200
@@ -150,7 +150,7 @@ def post_move():
         decision = results.pop(wallet_id, session_id)
         
         if decision == Type.BAD:
-            return "Invalid move!", 500
+            return "Invalid move!", 400
         else:
             transaction = load_ledger()[-1]
             return jsonify(transaction), 200

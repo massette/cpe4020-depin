@@ -184,9 +184,13 @@ while True:
                     sent_ok = True
                 else:
                     print(f"Validator rejected: [{resp.status_code}] {resp.text}")
-                    try_count += 1
-                    time.sleep(backoff)
-                    backoff *= 2
+
+                    if resp.status_code == 408:
+                        try_count += 1
+                        time.sleep(backoff)
+                        backoff *= 2
+                    else:
+                        break
 
             except Exception as e:
                 print(f"Network error sending to validator: {e}")
