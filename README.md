@@ -75,7 +75,7 @@ Request body should be a stream of raw bytes (`application/octet-stream`) repres
 ### Validator Messaging
 Communications between validators utilize a custom application-level messaging protocol built on top of raw TCP sockets.
 
-Each message includes an arbitary number of fields separated by the ASCII ".". Because encrypted JSON data and encrypted byte streams may include the separator, they are always the last field of a message containing them.
+Each message includes an arbitary number of fields separated by the ASCII `.`. Because encrypted JSON data and encrypted byte streams may include the separator, they are always the last field of a message containing them.
 
 Every message is prefixed with a 3-bit type indicating the context of the communication and the fields that follow.
 
