@@ -1,5 +1,5 @@
 # Lock Monitor with DePIN
-Final project for CPE4020 Spring 2026. This represents a proof of concept for a system of sensors and validators to aggregate and reward data on the status of a rotational locks for estimating occupancy and usage of public restrooms.
+Final project for CPE4020 Spring 2026. This represents a proof of concept for a Decentralized Physical Infrastructre Network (DePIN) of sensors and validators to aggregate data on the status of rotational locks for estimating occupancy of public restrooms over time.
 
 ## Setup
 For this project, mining scripts have been tested on a Raspberry Pi 5 with connected MPU6050 to produce sensor readings. Validator scripts have been tested primarily on Debian 13.4 and Windows 11.
