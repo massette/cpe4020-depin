@@ -3,7 +3,7 @@ import socket
 import secrets
 import requests
 import json
-from datetime import datetime, UTC
+import time
 
 from lib.const import Time, Type, Address
 from lib.error import AppException
@@ -67,20 +67,17 @@ def request_validator():
 # echo any input from stdin to the /mint endpoint
 if __name__ == "__main__":
     addr = request_validator()
-    mint_uri = "http://{}:6561/mint".format(addr)
+    uri = "http://{}:6561/move".format(addr)
 
     data = json.dumps({
         "node_id": NODE_ID,
-        "timestamp": datetime.now(UTC).isoformat(),
-        "event": "lock_rotation",
-
-        "angle_change_deg": 20,
-        "prev_angle_deg": 40,
-        "angle_deg": 60,
+        "timestamp": time.time(),
+        "recipient": "55e1511f01e6b8b1f0b08c712ba98b7ad8a0bdbb0b8ec37f63778a9c2315b37f",
+        "amount": 60,
     })
 
     payload = keys["self"].sign(data)
-    requests.post(mint_uri, payload)
+    requests.post(uri, payload)
 
 #    while True:
 #        raw = input("> ")

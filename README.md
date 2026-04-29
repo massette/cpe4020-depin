@@ -26,6 +26,9 @@ By default, this is one of: `W01`, `W02`.
 
 Recognized wallet keys are stored in `Address.WALLETS` of [lib/const](lib/const.py).
 
+A wallet can also send tokens to another wallet with the following command:
+`python DEPIN_transfer.py <WALLET ID> <TO> <AMOUNT>`
+
 ### Other scripts
 Two utility scripts have been included in the [scripts/](scripts/) directory:
 - [generate_keys](scripts/generate_keys.py) will generate all validator keys and key-pairs for two wallets (W01, W02). These keys will only be generated on the device running this script, and any existing keys will be overwritten.
@@ -68,9 +71,28 @@ Returns all transactions involving this wallet.
 Returns the IDs of all validators on the network.
 
 #### (POST) /mint
-Attempts to mint a new token.
+Attempts to mint new tokens.
 
-Request body should be a stream of raw bytes (`application/octet-stream`) representing the signed JSON payload, `M.Kw-(H(M))`.
+Request body should be a stream of raw bytes (`application/octet-stream`) representing a signed JSON payload, `M.Kw-(H(M))`.
+
+The JSON payload M should include the following fields:
+- "node_id". String representing the ID of the requesting wallet.
+- "timestamp". UNIX timestamp of when the sensor reading was taken.
+- "event". String representing the type of sensor event.
+- "angle_deg". The current angular position of the sensor as a float.
+- "prev_angle_deeg". The last recorded angular position as a float.
+- "angle_change_deg". The last measured angular movement of the sensor as a float.
+
+#### (POST) /move
+Attempts to transfer tokens from one wallet to another.
+
+Request body should be a stream of raw bytes (`application/octet-stream`) representing a signed JSON payload, `M.Kw-(H(M))`.
+
+The JSON payload M should include the following fields:
+- "node_id". String representing the ID of the requesting wallet.
+- "timestamp". UNIX timestamp of when the request was sent.
+- "recipient". Address to send the tokens to.
+- "amount". Amount of tokens to transfer.
 
 ### Validator Messaging
 Communications between validators utilize a custom application-level messaging protocol built on top of raw TCP sockets.
@@ -104,7 +126,7 @@ Message body is encrypted with wallet key for confidentiality:
 #### Mint request (010, TKN)
 `TKN.Kvv(WALLET_ID.SESSION_ID.M.Kw-(H(M))`
 
-Represents a packet of unvalidated data to mint a new token from.
+Represents a packet of unvalidated data to mint new tokens from.
 
 Message body is encrypted with symmetric validator key to ensure both sender and receiver are authorized validators:
 - WALLET_ID. ID of the public key to verify the signature with.
@@ -134,6 +156,12 @@ Message body is encrypted with symmetric validator key to ensure both sender and
 - Same form as VAL, with additional timestamp of consensus.
 
 Once all validators have reached a consensus, the oldest decision is used to add a new block to the ledger.
+
+#### Transfer request (101, MOV)
+`MOV.Kvv(WALLET_ID.SESSION_ID.M.Kw-(H(M))`
+
+Represents a packet of unvalidated data to transfer tokens from.
+Same form as TKN.
 
 #### Reject request (000, BAD)
 `BAD`

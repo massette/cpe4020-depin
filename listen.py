@@ -12,7 +12,7 @@ from lib.keys import Symmetric, Public, Private
 from lib.parse import Message
 from lib.bytes import concat
 
-from ledger import add_block
+from ledger import add_block, load_by_wallet
 
 ################################################################ NODE DETAILS ##
 NODE_ID = sys.argv[1]
@@ -36,10 +36,15 @@ class Session:
         self.session = session # (wallet_id, session_id)
         self.data = None
 
+        self.from_addr = None
+        self.to_addr = None
+        self.amount = None
+
         # votes towards a local consensus
         self.val_received = set()
         self.counts = {
             Type.TKN: 0,
+            Type.MOV: 0,
             Type.BAD: 0,
         }
 
@@ -47,6 +52,16 @@ class Session:
         self.don_received = set()
         self.consensus = None
         self.timestamp = None
+
+    def as_tkn(self, wallet_id):
+        self.from_addr = "MINT"
+        self.to_addr = keys[wallet_id].reveal()
+        self.amount = 10
+
+    def as_mov(self, wallet_id, recipient, amount):
+        self.from_addr = keys[wallet_id].reveal()
+        self.to_addr = recipient
+        self.amount = amount
 
     def set_data(self, data):
         # check if data has already been set
@@ -149,31 +164,20 @@ class Session:
         print()
 
         # if accepted, add block to ledger
-        if self.consensus == Type.TKN:
+        if (self.consensus == Type.TKN) or (self.consensus == Type.MOV):
             add_block(
                 self.timestamp,
-                "MINT",
-                keys[self.session[0]].reveal(),
+                self.from_addr,
+                self.to_addr, # keys[self.session[0]].reveal(),
                 self.consensus_from,
-                self.data
+                self.data,
+                self.amount,
             )
 
             print("======================================== TKN ! ==")
             print("TIME=", self.timestamp)
-            print("FROM=", b"MINT")
-            print("TO  =", keys[self.session[0]].reveal())
-            print("-------------------------------------------------")
-            print(self.data)
-            print("=================================================")
-            print()
-        elif self.consensus == Type.MOV:
-            # add_block
-
-            print()
-            print("======================================== MOV ! ==")
-            print("TIME=", self.timestamp)
-            print("FROM=", b"MINT")
-            print("TO  =", keys[self.session[0]].reveal())
+            print("FROM=", self.from_addr)
+            print("TO  =", self.to_addr)
             print("-------------------------------------------------")
             print(self.data)
             print("=================================================")
@@ -296,9 +300,11 @@ def handle_validator(tcp):
 
         # choose validation logic based on action
         if msg.type == Type.TKN:
-            decision = validate_mint(data)
+            session.as_tkn(wallet_id)
+            decision = validate_mint(wallet_id, data)
         else:
-            decision = validate_move(data)
+            session.as_mov(wallet_id, data["recipient"], data["amount"])
+            decision = validate_move(wallet_id, data)
 
         # update session
         session.add_decision(NODE_ID, decision)
@@ -337,11 +343,15 @@ def handle_validator(tcp):
         print("WARN! Unexpected message type {}.".format(msg.type))
 
 # run validation on mint data
-def validate_mint(data):
+def validate_mint(wallet_id, data):
     # check for required fields
     if any(key not in data for key in ("node_id", "timestamp", "event")):
         print("Reject! Missing required field.")
         return Type.BAD
+
+    # check node id
+    if wallet_id != data["node_id"]:
+        print("Reject! Bad ID.")
     
     # check timestamp
     now = time.time()
@@ -379,13 +389,17 @@ def validate_mint(data):
     return Type.TKN
 
 # run validation on transfer data
-def validate_move(data):
+def validate_move(wallet_id, data):
     # check for required fields
     if any(key not in data for key in ("node_id", "timestamp",
                                        "recipient", "amount")):
         print("Reject! Missing required field.")
         return Type.BAD
 
+    # check node id
+    if wallet_id != data["node_id"]:
+        print("Reject! Bad ID.")
+    
     # check timestamp
     now = time.time()
 
@@ -403,7 +417,18 @@ def validate_move(data):
         print("Reject! Invalid amount.")
         return Type.BAD
     
-    if wallets[data["recipient"]] < data["amount"]:
+    # calculate balance
+    from_addr = keys[wallet_id].reveal()
+    from_wallet = load_by_wallet(from_addr)
+    balance = 0
+
+    for block in from_wallet:
+        if block["to"] == from_addr:
+            balance += block["amount"]
+        if block["from"] == from_addr:
+            balance -= block["amount"]
+
+    if balance < data["amount"]:
         print("Reject! Insufficient funds.")
         return Type.BAD
     
