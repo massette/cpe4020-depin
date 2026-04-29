@@ -21,7 +21,7 @@ By default, this is one of: `V01`, `V02`, `V03`.
 
 ### Wallet
 First, install expected libraries.
-`pip install cryptography requests`
+`pip install cryptography requests RPi.GPIO rpi_ws281x sysv_ipc adafruit-circuitpython`
 
 A wallet node with a connected sensor is started by the command:
 `python DEPIN_sensor.py <WALLET ID>`
