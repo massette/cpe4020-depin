@@ -29,7 +29,7 @@ REQUEST_TIMEOUT = 5.0
 
 ################################################################ NODE DETAILS ##
 # parse arguments
-if len(sys.argv) < 2:
+if len(sys.argv) != 2:
     print("USAGE: python {} <WALLET ID>".format(sys.argv[0]))
     print()
 
@@ -37,7 +37,7 @@ if len(sys.argv) < 2:
 elif sys.argv[1] not in Address.WALLETS:
     print(
         "Invalid ID {}, expected one of: {}".format(
-            sys.argv[1], ", ".join(validators)
+            sys.argv[1], ", ".join(wallets)
         )
     )
     print()
@@ -187,7 +187,7 @@ while True:
 
                     if resp.status_code == 400:
                         break
-                    else
+                    else:
                         try_count += 1
                         time.sleep(backoff)
                         backoff *= 2

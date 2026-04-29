@@ -399,6 +399,10 @@ def validate_move(wallet_id, data):
     # check node id
     if wallet_id != data["node_id"]:
         print("Reject! Bad ID.")
+        return Type.BAD
+    elif wallet_id == data["recipient"]:
+        print("Reject! Circular transfer.")
+        return Type.BAD
     
     # check timestamp
     now = time.time()

@@ -7,6 +7,9 @@ For this project, mining scripts have been tested on a Raspberry Pi 5 with conne
 The main entry points are [DEPIN_validator](DEPIN_validator.py) and [DEPIN_sensor](DEPIN_sensor.py), depending on whether a node is acting as a validator or a wallet.
 
 ### Validator
+First, install expected libraries.
+`pip install cryptography Flask`
+
 A validator node is started by the command:
 `python DEPIN_validator.py <VALIDATOR ID>`
 
@@ -17,6 +20,9 @@ By default, this is one of: `V01`, `V02`, `V03`.
 **NOTE: Although consensus only requires a majority, all validators must be running *and reachable* to approve any addition to the ledger.**
 
 ### Wallet
+First, install expected libraries.
+`pip install cryptography requests`
+
 A wallet node with a connected sensor is started by the command:
 `python DEPIN_sensor.py <WALLET ID>`
 
@@ -26,8 +32,8 @@ By default, this is one of: `W01`, `W02`.
 
 Recognized wallet keys are stored in `Address.WALLETS` of [lib/const](lib/const.py).
 
-A wallet can also send tokens to another wallet with the following command:
-`python DEPIN_transfer.py <WALLET ID> <TO> <AMOUNT>`
+Minted tokens can be additionally transfered to other wallets by the command:
+`python DEPIN_transfer.py <WALLET_ID> <TO_ADDRESS> <AMOUNT>`
 
 ### Other scripts
 Two utility scripts have been included in the [scripts/](scripts/) directory:

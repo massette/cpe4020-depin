@@ -21,7 +21,7 @@ validators = list(Address.VALIDATORS.keys())
 
 ################################################################ NODE DETAILS ##
 # parse arguments
-if len(sys.argv) < 2:
+if len(sys.argv) != 2:
     print("USAGE: python {} <VALIDATOR ID>".format(sys.argv[0]))
     print()
 
