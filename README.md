@@ -59,9 +59,9 @@ Returns the [dashboard webpage](template/index.html), summarizing the current st
 Returns the entire ledger in JSON format as an array of blocks.
 
 #### (GET) /wallets
-Returns the results of `/wallets/<addr>` for every wallet on the network.
+Returns the results of `/wallets/<address>` for every wallet on the network.
 
-#### (GET) /wallets/<addr>
+#### (GET) /wallets/\<address>
 Returns all transactions involving this wallet.
 
 #### (GET) /validators
